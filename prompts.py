@@ -91,7 +91,8 @@ ALLOCATION_METHODOLOGY = """
 
 CAPABILITIES = """
 【你能做什么·用户问起时如实回答】
-0. 管理持仓：录入/查看/更新你的资产组合（add_holding/list_holdings/update_holding/remove_holding），跨会话记住。
+0. 管理持仓 + 资产看板：录入/查看/更新组合（add/list/update/remove_holding），并出看板
+   （portfolio_dashboard：总市值、大类占比、行业占比、现金比例、最大持仓、浮动盈亏），跨会话记住。
 1. 宏观/概念解读：检索多来源知识库（kb_search/kb_read）讲清利率、货币、估值、周期等，注明出处。
 2. 宏观数据：取利率(LPR)/国债收益率/CPI/PPI/PMI/M2（get_macro_indicator），让判断有真数据。
 3. 估值判断：取宽基指数 PE/PB 当前值与历史分位，答"贵不贵"（get_valuation）。

@@ -189,3 +189,77 @@ async def remove_holding(args: dict) -> dict:
     _save(items)
     return {"content": [{"type": "text",
             "text": f"已删除 #{removed['id']} {removed['name']}。剩余 {len(items)} 笔。"}]}
+
+
+# ── 工具 5：资产看板（P2，只读分析）──────────────────────────────────
+def _pct(part: float, whole: float) -> float:
+    return round(part / whole * 100, 1) if whole else 0.0
+
+
+@tool(
+    "portfolio_dashboard",
+    "生成资产看板：总市值、大类占比、行业占比、现金比例、最大单一持仓、浮动盈亏。"
+    "做结构分析/风险诊断/复盘时先调它拿全局画像。",
+    {},
+    annotations=_RO,
+)
+async def portfolio_dashboard(args: dict) -> dict:
+    items = _load()
+    if not items:
+        return {"content": [{"type": "text", "text": "组合为空，先用 add_holding 录入持仓。"}]}
+
+    total = sum(float(h.get("amount", 0) or 0) for h in items)
+
+    # 大类分布
+    cls: dict[str, float] = {}
+    for h in items:
+        c = h.get("asset_class", "其他")
+        cls[c] = cls.get(c, 0) + float(h.get("amount", 0) or 0)
+    by_class = sorted(
+        ({"class": k, "amount": round(v, 2), "pct": _pct(v, total)} for k, v in cls.items()),
+        key=lambda x: -x["amount"])
+
+    # 行业分布（仅有 sector 的持仓）
+    sec: dict[str, float] = {}
+    sec_covered = 0.0
+    for h in items:
+        s = (h.get("sector") or "").strip()
+        if s:
+            amt = float(h.get("amount", 0) or 0)
+            sec[s] = sec.get(s, 0) + amt
+            sec_covered += amt
+    by_sector = sorted(
+        ({"sector": k, "amount": round(v, 2), "pct": _pct(v, total)} for k, v in sec.items()),
+        key=lambda x: -x["amount"])
+
+    # 现金比例
+    cash = sum(float(h.get("amount", 0) or 0) for h in items if h.get("asset_class") == "现金/货基")
+
+    # 最大单一持仓
+    top = max(items, key=lambda h: float(h.get("amount", 0) or 0))
+
+    # 浮动盈亏（仅有成本的持仓）
+    cost_items = [h for h in items if h.get("cost")]
+    pnl = None
+    if cost_items:
+        cost_basis = sum(float(h["cost"]) for h in cost_items)
+        mv_covered = sum(float(h.get("amount", 0) or 0) for h in cost_items)
+        pnl = {
+            "cost_basis": round(cost_basis, 2),
+            "market_value_covered": round(mv_covered, 2),
+            "unrealized_pnl": round(mv_covered - cost_basis, 2),
+            "return_pct": _pct(mv_covered - cost_basis, cost_basis),
+            "coverage_pct": _pct(mv_covered, total),
+        }
+
+    board = {
+        "total": round(total, 2),
+        "count": len(items),
+        "by_class": by_class,
+        "by_sector": by_sector,
+        "sector_covered_pct": _pct(sec_covered, total),
+        "cash_ratio": _pct(cash, total),
+        "top_holding": {"name": top.get("name"), "pct": _pct(float(top.get("amount", 0) or 0), total)},
+        "pnl": pnl,
+    }
+    return {"content": [{"type": "text", "text": json.dumps(board, ensure_ascii=False)}]}
