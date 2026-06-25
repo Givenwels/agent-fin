@@ -38,3 +38,19 @@ async def start_allocation(args: dict) -> dict:
     text = p.read_text(encoding="utf-8")
     return {"content": [{"type": "text",
             "text": "已加载『一键资产配置』流程，请从第 1 步开始逐步执行：\n\n" + text}]}
+
+
+@tool(
+    "decision_checklist",
+    "加载『投资决策 Checklist』。当用户要买入/卖出某资产、或问'这笔该不该买/卖'时调用，"
+    "随后按清单逐项追问，帮用户把冲动决策变成有纪律的决策，走完建议记 add_journal。",
+    {},
+    annotations=_RO,
+)
+async def decision_checklist(args: dict) -> dict:
+    p = PLAYBOOK_DIR / "decision_checklist.md"
+    if not p.exists():
+        return {"content": [{"type": "text", "text": f"错误：找不到清单文件 {p}。"}], "isError": True}
+    text = p.read_text(encoding="utf-8")
+    return {"content": [{"type": "text",
+            "text": "已加载『投资决策 Checklist』，请逐项追问用户（不要一次甩完）：\n\n" + text}]}
