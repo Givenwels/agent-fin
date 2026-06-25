@@ -15,6 +15,11 @@ from prompts import DISCLAIMER
 # fin MCP server 暴露的工具全名：mcp__<server>__<tool>
 WORKFLOW_TOOLS = [
     "mcp__fin__start_allocation",
+    "mcp__fin__decision_checklist",
+]
+JOURNAL_TOOLS = [
+    "mcp__fin__add_journal",
+    "mcp__fin__list_journal",
 ]
 HOLDINGS_TOOLS = [
     "mcp__fin__add_holding",
@@ -44,7 +49,8 @@ QUANT_TOOLS = [
     "mcp__fin__optimize_portfolio",
 ]
 ALL_FIN_TOOLS = (
-    WORKFLOW_TOOLS + HOLDINGS_TOOLS + MEMORY_TOOLS + KB_TOOLS + DATA_TOOLS + QUANT_TOOLS
+    WORKFLOW_TOOLS + HOLDINGS_TOOLS + JOURNAL_TOOLS
+    + MEMORY_TOOLS + KB_TOOLS + DATA_TOOLS + QUANT_TOOLS
 )
 
 AGENTS = {

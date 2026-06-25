@@ -165,6 +165,18 @@ async def handle_local_command(user: str) -> bool:
         except Exception:
             print(r["content"][0]["text"])
         return True
+    if cmd in ("/journal", "/j", "/diary"):
+        import json
+        from tools.journal import list_journal
+        r = await _handler(list_journal)({})
+        try:
+            data = json.loads(r["content"][0]["text"])
+            print(f"投资日记共 {data['count']} 条，显示最近 {data['showing']} 条：")
+            for e in data["entries"]:
+                print(f"  #{e['id']} {e['date']} [{e['type']}] {e['title'] or e['content'][:30]}")
+        except Exception:
+            print(r["content"][0]["text"])
+        return True
     if cmd in ("/portfolio", "/p", "/holdings"):
         import json
         from tools.holdings import list_holdings
