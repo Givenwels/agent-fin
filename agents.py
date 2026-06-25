@@ -16,6 +16,12 @@ from prompts import DISCLAIMER
 WORKFLOW_TOOLS = [
     "mcp__fin__start_allocation",
 ]
+HOLDINGS_TOOLS = [
+    "mcp__fin__add_holding",
+    "mcp__fin__list_holdings",
+    "mcp__fin__update_holding",
+    "mcp__fin__remove_holding",
+]
 MEMORY_TOOLS = [
     "mcp__fin__save_memory",
     "mcp__fin__recall_memories",
@@ -35,7 +41,9 @@ QUANT_TOOLS = [
     "mcp__fin__calc_portfolio_metrics",
     "mcp__fin__optimize_portfolio",
 ]
-ALL_FIN_TOOLS = WORKFLOW_TOOLS + MEMORY_TOOLS + KB_TOOLS + DATA_TOOLS + QUANT_TOOLS
+ALL_FIN_TOOLS = (
+    WORKFLOW_TOOLS + HOLDINGS_TOOLS + MEMORY_TOOLS + KB_TOOLS + DATA_TOOLS + QUANT_TOOLS
+)
 
 AGENTS = {
     # 宏观研究员：只读知识库，回答"现在是什么宏观环境/该用什么框架"
