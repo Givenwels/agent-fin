@@ -19,6 +19,7 @@ from .holdings import (
 from .knowledge import kb_index, kb_search, kb_read
 from .macro import get_macro_indicator, get_valuation
 from .market import get_price_history, SAMPLE_RETURNS
+from .risk import diagnose_risk
 from .memory import (
     save_memory,
     recall_memories,
@@ -32,6 +33,7 @@ from .portfolio import calc_portfolio_metrics, optimize_portfolio
 ALL_TOOLS = [
     start_allocation,
     add_holding, list_holdings, update_holding, remove_holding, portfolio_dashboard,
+    diagnose_risk,
     save_memory, recall_memories, forget_memory,
     kb_index, kb_search, kb_read,
     get_macro_indicator, get_valuation,
@@ -42,6 +44,7 @@ __all__ = [
     "ALL_TOOLS",
     "start_allocation",
     "add_holding", "list_holdings", "update_holding", "remove_holding", "portfolio_dashboard",
+    "diagnose_risk",
     "save_memory", "recall_memories", "forget_memory", "load_memory_block",
     "kb_index", "kb_search", "kb_read",
     "get_macro_indicator", "get_valuation",

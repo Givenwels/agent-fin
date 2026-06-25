@@ -196,18 +196,8 @@ def _pct(part: float, whole: float) -> float:
     return round(part / whole * 100, 1) if whole else 0.0
 
 
-@tool(
-    "portfolio_dashboard",
-    "生成资产看板：总市值、大类占比、行业占比、现金比例、最大单一持仓、浮动盈亏。"
-    "做结构分析/风险诊断/复盘时先调它拿全局画像。",
-    {},
-    annotations=_RO,
-)
-async def portfolio_dashboard(args: dict) -> dict:
-    items = _load()
-    if not items:
-        return {"content": [{"type": "text", "text": "组合为空，先用 add_holding 录入持仓。"}]}
-
+def compute_board(items: list[dict]) -> dict:
+    """计算组合全局画像（看板与风险诊断共用）。items 非空。"""
     total = sum(float(h.get("amount", 0) or 0) for h in items)
 
     # 大类分布
@@ -252,7 +242,7 @@ async def portfolio_dashboard(args: dict) -> dict:
             "coverage_pct": _pct(mv_covered, total),
         }
 
-    board = {
+    return {
         "total": round(total, 2),
         "count": len(items),
         "by_class": by_class,
@@ -262,4 +252,17 @@ async def portfolio_dashboard(args: dict) -> dict:
         "top_holding": {"name": top.get("name"), "pct": _pct(float(top.get("amount", 0) or 0), total)},
         "pnl": pnl,
     }
-    return {"content": [{"type": "text", "text": json.dumps(board, ensure_ascii=False)}]}
+
+
+@tool(
+    "portfolio_dashboard",
+    "生成资产看板：总市值、大类占比、行业占比、现金比例、最大单一持仓、浮动盈亏。"
+    "做结构分析/风险诊断/复盘时先调它拿全局画像。",
+    {},
+    annotations=_RO,
+)
+async def portfolio_dashboard(args: dict) -> dict:
+    items = _load()
+    if not items:
+        return {"content": [{"type": "text", "text": "组合为空，先用 add_holding 录入持仓。"}]}
+    return {"content": [{"type": "text", "text": json.dumps(compute_board(items), ensure_ascii=False)}]}

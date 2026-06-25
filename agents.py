@@ -22,6 +22,7 @@ HOLDINGS_TOOLS = [
     "mcp__fin__update_holding",
     "mcp__fin__remove_holding",
     "mcp__fin__portfolio_dashboard",
+    "mcp__fin__diagnose_risk",
 ]
 MEMORY_TOOLS = [
     "mcp__fin__save_memory",
