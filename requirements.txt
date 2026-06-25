@@ -8,6 +8,12 @@ pandas>=2.0
 # 读取 .env 里的 ANTHROPIC_API_KEY（main.py 启动时自动加载）
 python-dotenv>=1.0
 
+# PDF 文本抽取（把书籍/研报蒸馏进知识库时用）
+pypdf>=4.0
+
+# 测试（开发用）
+pytest>=8.0
+
 # 行情数据（可选：没装也能用内置离线样本演示）
 akshare>=1.12
 

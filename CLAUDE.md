@@ -31,7 +31,7 @@
 ### 常用命令
 - 安装依赖：`pip install -r requirements.txt`（在 finagent 环境）
 - 启动开发环境：`python main.py`（或双击 `run.bat`）
-- 跑测试：暂无
+- 跑测试：`pytest -q`（测 tools/ 核心纯逻辑，见 tests/）
 - 代码格式检查 (lint)：暂无
 - 类型检查 (typecheck)：暂无
 - 构建上线版本：无（命令行应用，直接运行）
