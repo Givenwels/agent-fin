@@ -140,8 +140,8 @@ def _risk_parity(cov: np.ndarray, iters: int = 5000) -> np.ndarray:
 
 @tool(
     "optimize_portfolio",
-    "根据日收益数据求解最优权重。method 取 'mean_variance'(最大夏普) 或 "
-    "'risk_parity'(风险平价/各标的风险贡献相等)。返回建议权重与对应组合指标。",
+    "按某方法求解一组『参考权重』(用于教育/对比，非买卖建议)。method 取 'mean_variance'(最大夏普) "
+    "或 'risk_parity'(风险平价/各标的风险贡献相等)。返回参考权重与组合指标，供与用户当前持仓对比理解。",
     {"symbols": list, "returns_data": dict, "method": str},
     annotations=_RO,
 )
@@ -171,5 +171,7 @@ async def optimize_portfolio(args: dict) -> dict:
         "symbols": valid,
         "weights": {s: round(float(x), 4) for s, x in zip(valid, w)},
         **_metrics(port_daily),
+        "用途": "这是该方法下的『参考配置』，用于理解不同方法的风险收益权衡、或与你当前持仓对比，"
+                "非买卖建议；实际取舍结合你的风险画像，决策与风险自负。",
     }
     return {"content": [{"type": "text", "text": json.dumps(out, ensure_ascii=False)}]}
