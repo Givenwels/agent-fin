@@ -1,0 +1,26 @@
+# 密钥与环境变量（严禁入库）
+.env
+.env.*
+!.env.example
+secrets.*
+
+# 用户私有数据（资产/记忆，不入库）
+memory/
+portfolio/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# 临时/验证文件
+_pdftmp/
+_verify*.py
+*.tmp
+
+# 系统
+.DS_Store
+Thumbs.db
