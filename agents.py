@@ -20,6 +20,7 @@ WORKFLOW_TOOLS = [
 JOURNAL_TOOLS = [
     "mcp__fin__add_journal",
     "mcp__fin__list_journal",
+    "mcp__fin__review_report",
 ]
 HOLDINGS_TOOLS = [
     "mcp__fin__add_holding",
