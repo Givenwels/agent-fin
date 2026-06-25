@@ -36,20 +36,8 @@ SECTOR_MAX = _thr("FIN_RISK_SECTOR_MAX", 40)   # 单一行业占比上限
 CASH_MIN = _thr("FIN_RISK_CASH_MIN", 5)        # 现金比例下限
 
 
-@tool(
-    "diagnose_risk",
-    "诊断当前持仓的结构性风险：单一资产占比过高、大类过于集中、行业集中度过高、现金比例过低。"
-    "返回风险提示与改善方向（非买卖指令）。用户问'我的组合有什么风险'时调用。",
-    {},
-    annotations=_RO,
-)
-async def diagnose_risk(args: dict) -> dict:
-    items = _load()
-    if not items:
-        return {"content": [{"type": "text",
-                "text": "组合为空，先用 add_holding 录入持仓后再诊断。"}]}
-
-    b = compute_board(items)
+def evaluate_risk(b: dict) -> list[dict]:
+    """对组合画像（compute_board 的输出）跑规则，返回风险提示列表。诊断与复盘共用。"""
     warnings: list[dict] = []
 
     # 1) 单一资产占比过高
@@ -92,6 +80,24 @@ async def diagnose_risk(args: dict) -> dict:
             "detail": f"现金/货基占 {b['cash_ratio']}%（下限 {CASH_MIN}%）",
             "suggestion": "现金过低会削弱应急与逢低补仓的能力，可考虑留出流动性缓冲。",
         })
+    return warnings
+
+
+@tool(
+    "diagnose_risk",
+    "诊断当前持仓的结构性风险：单一资产占比过高、大类过于集中、行业集中度过高、现金比例过低。"
+    "返回风险提示与改善方向（非买卖指令）。用户问'我的组合有什么风险'时调用。",
+    {},
+    annotations=_RO,
+)
+async def diagnose_risk(args: dict) -> dict:
+    items = _load()
+    if not items:
+        return {"content": [{"type": "text",
+                "text": "组合为空，先用 add_holding 录入持仓后再诊断。"}]}
+
+    b = compute_board(items)
+    warnings = evaluate_risk(b)
 
     result = {
         "total": b["total"],
