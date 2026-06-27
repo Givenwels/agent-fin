@@ -19,7 +19,15 @@ import asyncio
 import pathlib
 import sys
 
-# Windows 控制台默认 GBK，强制 UTF-8 避免中文/特殊字符报错
+# Windows 控制台默认 GBK：① 把控制台代码页切到 UTF-8(65001) ② Python 输出也用 UTF-8。
+# 两者配合，无论用 run.bat 还是直接 python main.py，中文都不乱码。
+try:
+    if sys.platform == "win32":
+        import ctypes
+        ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+        ctypes.windll.kernel32.SetConsoleCP(65001)
+except Exception:
+    pass
 try:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stdin.reconfigure(encoding="utf-8")
