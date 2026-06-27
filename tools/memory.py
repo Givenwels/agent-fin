@@ -109,6 +109,29 @@ async def save_memory(args: dict) -> dict:
 
 # ── 工具 2：回忆 ─────────────────────────────────────────────────────
 @tool(
+    "recall_memory",
+    "按关键词检索记忆（记多了用它取相关的，比全量回看省）。返回命中的 [分类/键] 与内容。",
+    {"query": str},
+    annotations=_RO,
+)
+async def recall_memory(args: dict) -> dict:
+    kws = [k for k in re.split(r"\s+", str(args.get("query", "")).strip()) if k]
+    if not kws:
+        return {"content": [{"type": "text", "text": "错误：query 不能为空。"}], "isError": True}
+    hits = []
+    for p in _all_files():
+        cat, key, body = _parse(p)
+        blob = f"{cat} {key} {body}".lower()
+        score = sum(1 for k in kws if k.lower() in blob)
+        if score:
+            hits.append((score, f"[{cat}/{key}] {body}"))
+    if not hits:
+        return {"content": [{"type": "text", "text": f"没有匹配「{' '.join(kws)}」的记忆。"}]}
+    hits.sort(key=lambda x: -x[0])
+    return {"content": [{"type": "text", "text": "\n".join(h[1] for h in hits[:8])}]}
+
+
+@tool(
     "recall_memories",
     "列出当前已记住的全部用户信息。用户问『你还记得我什么』或需要确认画像时调用。",
     {},

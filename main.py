@@ -193,10 +193,36 @@ async def handle_local_command(user: str) -> bool:
     return False
 
 
+EXIT_EXTRACT_PROMPT = (
+    "【会话结束·记忆整理】回顾本次对话，把值得长期记住的、关于用户的稳定事实用 save_memory 存下来"
+    "（风险画像/持仓偏好/重要决策/明确偏好；只存跨会话有用的，不存一次性闲聊）。"
+    "再用 save_memory（category=会话, key=上次小结）存一句话概括本次聊了什么。完成后只回复'记忆已整理'。"
+)
+
+
+async def auto_extract_memory(client: ClaudeSDKClient) -> None:
+    """会话结束时让 agent 自动提炼并存储记忆（best-effort，失败不影响退出）。"""
+    print("📝 正在整理本次对话的记忆…", flush=True)
+    try:
+        await client.query(EXIT_EXTRACT_PROMPT)
+        saved = 0
+        async for msg in client.receive_response():
+            if isinstance(msg, AssistantMessage):
+                for b in msg.content:
+                    if isinstance(b, ToolUseBlock) and b.name.endswith("save_memory"):
+                        saved += 1
+            elif isinstance(msg, ResultMessage):
+                break
+        print(f"✓ 记忆已整理（更新 {saved} 条），下次打开我会记得。")
+    except Exception as e:
+        print(f"（记忆整理跳过：{type(e).__name__}）")
+
+
 async def main() -> None:
     print(BANNER)
     print(opening_guidance())
 
+    turns = 0
     async with ClaudeSDKClient(options=build_options()) as client:
         while True:
             try:
@@ -207,6 +233,8 @@ async def main() -> None:
             if not user:
                 continue
             if user.lower() in ("exit", "quit", "q"):
+                if turns > 0:
+                    await auto_extract_memory(client)
                 print("再见")
                 break
             if user.startswith("/") or user in ("？",):
@@ -217,6 +245,7 @@ async def main() -> None:
                 await client.query(user)
                 print("助手 > ", end="", flush=True)
                 await stream_reply(client)
+                turns += 1
             except Exception as e:
                 # 单次出错（如模型瞬时报错、网络抖动）不应崩掉整个会话
                 print(f"\n[出错] {type(e).__name__}: {e}\n（可重试上一句，或换个问法）")
