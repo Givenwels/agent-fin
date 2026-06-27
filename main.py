@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import pathlib
 import sys
 
@@ -83,6 +84,18 @@ def _tokens(usage) -> int:
     return int(usage.get("input_tokens", 0) or 0) + int(usage.get("output_tokens", 0) or 0)
 
 
+def _cost_meaningful() -> bool:
+    """SDK 的 total_cost_usd 按 Claude 美元价算。接 DeepSeek 等第三方端点时该值无意义，
+    只显示 token（token 才是真实计费依据，用户按自己端点单价折算）。"""
+    model = os.environ.get("ANTHROPIC_MODEL", "").lower()
+    base = os.environ.get("ANTHROPIC_BASE_URL", "").lower()
+    if "deepseek" in model or "deepseek" in base:
+        return False
+    if model and "claude" not in model and "anthropic" not in model:
+        return False
+    return True
+
+
 async def stream_reply(client: ClaudeSDKClient, stats: dict) -> None:
     """打印一轮回复 + 末尾给一行可观测性footer（调了哪些工具/用时/token/累计花费）。"""
     tools_used = []
@@ -104,8 +117,9 @@ async def stream_reply(client: ClaudeSDKClient, stats: dict) -> None:
             stats["cost"] += cost
             dur = (msg.duration_ms or 0) / 1000
             tl = "、".join(dict.fromkeys(tools_used)) or "无"
-            print(f"\n  〔本轮 工具:{tl} · {dur:.1f}s · {tok} token"
-                  + (f" · 累计 ${stats['cost']:.4f}" if stats["cost"] else "") + "〕")
+            cost_part = (f" · 累计 ${stats['cost']:.4f}"
+                         if stats["cost"] and _cost_meaningful() else "")
+            print(f"\n  〔本轮 工具:{tl} · {dur:.1f}s · {tok} token{cost_part}〕")
 
 
 BANNER = """━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -193,8 +207,13 @@ async def handle_local_command(user: str, stats: dict) -> bool:
         print(HELP_TEXT)
         return True
     if cmd in ("/cost", "/stats", "/usage"):
-        print(f"本次会话：{stats['turns']} 轮 · {stats['tokens']} token"
-              + (f" · 约 ${stats['cost']:.4f}" if stats["cost"] else " · (端点未回传花费)"))
+        line = f"本次会话：{stats['turns']} 轮 · {stats['tokens']} token"
+        if _cost_meaningful() and stats["cost"]:
+            line += f" · 约 ${stats['cost']:.4f}"
+        else:
+            line += "（你接的是 DeepSeek 等第三方端点，$ 花费按 Claude 计价不准；"
+            line += "请用 token × 你端点的单价折算人民币）"
+        print(line)
         return True
     if cmd in ("/memory", "/mem", "/m"):
         from tools import load_memory_block
