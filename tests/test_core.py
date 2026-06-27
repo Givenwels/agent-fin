@@ -135,3 +135,37 @@ def test_price_cache_roundtrip():
     assert market.load_price_cache("不存在") is None
     import shutil
     shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ── 定时风险监控（主动型，纯规则）──────────────────────────────────────
+def test_watch_flags_concentrated_and_clears_balanced():
+    import shutil
+    import watch
+    import tools.holdings as holdings
+    import tools.review as review
+
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    holdings.HOLDINGS_FILE = tmp / "holdings.json"
+    review.SNAP_DIR = tmp / "snapshots"
+    watch.ALERT_DIR = tmp / "alerts"
+
+    # 集中组合 → 应有风险提示 + 写出 latest.md
+    holdings._save([
+        {"name": "某股", "asset_class": "股票/股票基金", "amount": 95000, "sector": "科技"},
+        {"name": "债", "asset_class": "债券/债基", "amount": 5000, "sector": ""},
+    ])
+    n = watch.run_watch()
+    assert n >= 3
+    assert (watch.ALERT_DIR / "latest.md").exists()
+
+    # 均衡组合 → 无风险 + 清掉 latest.md
+    holdings._save([
+        {"name": "宽基", "asset_class": "股票/股票基金", "amount": 25000, "sector": "宽基"},
+        {"name": "债", "asset_class": "债券/债基", "amount": 25000, "sector": ""},
+        {"name": "金", "asset_class": "商品(黄金等)", "amount": 25000, "sector": ""},
+        {"name": "货基", "asset_class": "现金/货基", "amount": 25000, "sector": ""},
+    ])
+    n2 = watch.run_watch()
+    assert n2 == 0
+    assert not (watch.ALERT_DIR / "latest.md").exists()
+    shutil.rmtree(tmp, ignore_errors=True)

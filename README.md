@@ -136,6 +136,7 @@ agent_fin/
 ├── memory/          # agent 私有记忆区（自动生成，跨会话持久）
 ├── playbooks/
 │   └── allocation.md # 一键资产配置 8 步流程（≈ skill）
+├── watch.py         # 定时风险监控（主动型，不依赖 LLM）：可挂系统计划任务
 └── tools/
     ├── playbook.py  # start_allocation：加载配置流程（≈ skills 触发加载）
     ├── memory.py    # save_memory/recall/forget + load_memory_block（≈ CLAUDE.md 机制）
@@ -147,6 +148,10 @@ agent_fin/
 
 **12 个工具，分 5 组**：工作流(start_allocation) · 记忆(3) · 知识库(3) · 数据(get_macro_indicator/
 get_valuation) · 量化(get_price_history/calc_portfolio_metrics/optimize_portfolio)。
+
+**主动监控（定时风险体检）**：`python watch.py` 跑一次，读已存持仓→跑风险规则+对比上次快照→
+有风险就写 `portfolio/alerts/latest.md`，**下次打开 agent 会主动提示你**。不依赖 LLM，可挂
+Windows 任务计划程序每天自动跑（命令见 `watch.py` 顶部注释）。退出码=风险条数。
 
 **一键资产配置**：对 agent 说"帮我做套资产配置"，它会调 `start_allocation` 加载流程，然后自主走完
 8 步——测风险→判宏观（检索知识库）→定大类（矛/盾四层）→取数→优化→算指标→给再平衡规则与证伪条件→存档。

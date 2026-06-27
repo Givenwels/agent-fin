@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import asyncio
+import pathlib
 import sys
 
 # Windows 控制台默认 GBK，强制 UTF-8 避免中文/特殊字符报错
@@ -155,6 +156,19 @@ def opening_guidance() -> str:
     )
 
 
+def pending_alert() -> str:
+    """启动时若有定时监控(watch.py)留下的告警，主动提示——把"被动"变"主动"。"""
+    f = pathlib.Path(__file__).resolve().parent / "portfolio" / "alerts" / "latest.md"
+    if not f.exists():
+        return ""
+    try:
+        body = f.read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
+    return ("⚠️ 上次定时监控发现风险（问我『详细说说风险』了解）：\n"
+            + "\n".join("   " + ln for ln in body.splitlines()[:8]) + "\n")
+
+
 def _handler(tool_obj):
     """取出 @tool 对象底层可调用的 handler（供本地命令直接调用，不走 LLM）。"""
     for a in ("handler", "_handler", "func", "fn", "callback"):
@@ -276,6 +290,9 @@ async def repl(continue_last: bool, stats: dict) -> None:
 
 async def main() -> None:
     print(BANNER)
+    alert = pending_alert()
+    if alert:
+        print(alert)
     print(opening_guidance())
 
     # 会话续接：问要不要接上上次对话
