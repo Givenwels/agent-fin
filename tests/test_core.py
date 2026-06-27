@@ -169,3 +169,34 @@ def test_watch_flags_concentrated_and_clears_balanced():
     assert n2 == 0
     assert not (watch.ALERT_DIR / "latest.md").exists()
     shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ── 待下单清单（调仓单）──────────────────────────────────────────────
+def test_order_list_buy_sell_deltas():
+    import asyncio
+    import shutil
+    import tools.orders as orders
+    import tools.holdings as holdings
+
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    holdings.HOLDINGS_FILE = tmp / "h.json"
+    holdings._save([
+        {"id": 1, "name": "沪深300ETF", "code": "510300", "asset_class": "股票/股票基金", "amount": 60000},
+        {"id": 2, "name": "国债ETF", "code": "511010", "asset_class": "债券/债基", "amount": 40000},
+    ])
+    handler = orders.generate_order_list
+    for a in ("handler", "_handler", "func", "fn", "callback"):
+        h = getattr(handler, a, None)
+        if callable(h):
+            handler = h
+            break
+    r = asyncio.run(handler({"target_weights": {"沪深300ETF": 0.4, "国债ETF": 0.4, "黄金ETF": 0.2},
+                             "total_amount": 0}))
+    import json
+    d = json.loads(r["content"][0]["text"])
+    byname = {o["标的"]: o for o in d["待下单清单"]}
+    assert byname["沪深300ETF"]["操作"] == "卖出" and byname["沪深300ETF"]["金额"] == 20000
+    assert byname["国债ETF"]["操作"] == "保持"
+    assert byname["黄金ETF"]["操作"] == "买入" and byname["黄金ETF"]["金额"] == 20000
+    assert d["合计买入"] == d["合计卖出"] == 20000  # 同总额调仓，买卖平衡
+    shutil.rmtree(tmp, ignore_errors=True)
