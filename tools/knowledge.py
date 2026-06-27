@@ -35,7 +35,33 @@ except Exception:  # pragma: no cover
 # ── 配置 ──────────────────────────────────────────────────────────────
 DEFAULT_KB_DIR = r"F:\笔记obsinlin\随便写\学习\财经"
 EXCLUDE_DIRS = {"25年", "26年", "raw"}  # 原始字幕/实时原文，默认不进检索
-MAX_READ_CHARS = 60_000
+MAX_READ_CHARS = 8_000  # 上下文控制：单次返回上限，超了截断并提示取小节
+
+
+def _headings(text: str) -> list[str]:
+    return [ln.strip().lstrip("#").strip()
+            for ln in text.splitlines() if ln.lstrip().startswith("#")]
+
+
+def _extract_section(text: str, section: str) -> str | None:
+    """取标题包含 section 的那一节（从该标题到下一个同/更高级标题）。"""
+    lines = text.splitlines()
+    start = None
+    for i, ln in enumerate(lines):
+        if ln.lstrip().startswith("#") and section in ln:
+            start = i
+            level = len(ln) - len(ln.lstrip("#").lstrip())  # 粗略层级
+            break
+    if start is None:
+        return None
+    out = [lines[start]]
+    for ln in lines[start + 1:]:
+        if ln.lstrip().startswith("#"):
+            lv = len(ln) - len(ln.lstrip("#").lstrip())
+            if lv <= level:
+                break
+        out.append(ln)
+    return "\n".join(out).strip()
 
 
 def _kb_roots() -> list[Path]:
@@ -169,13 +195,14 @@ async def kb_search(args: dict) -> dict:
 # ── 工具 3：读取整篇 ─────────────────────────────────────────────────
 @tool(
     "kb_read",
-    "读取知识库某篇笔记的完整内容。note 可传相对路径、文件名或标题关键字（来自 "
-    "kb_index/kb_search 的结果）。返回时带出处。",
-    {"note": str},
+    "读取知识库某篇笔记。note 传相对路径/文件名/标题关键字。section 选填：传某小节标题关键字"
+    "只取那一节（省上下文，优先用）；不传则返回全文（过长会截断并列出小节，再按小节取）。",
+    {"note": str, "section": str},
     annotations=_RO,
 )
 async def kb_read(args: dict) -> dict:
     note = str(args.get("note", "")).strip()
+    section = str(args.get("section", "")).strip()
     if not note:
         return {"content": [{"type": "text", "text": "错误：note 不能为空。"}], "isError": True}
 
@@ -205,8 +232,24 @@ async def kb_read(args: dict) -> dict:
     except ValueError:
         return {"content": [{"type": "text", "text": "错误：越界访问被拒绝。"}], "isError": True}
 
-    text = _read(p)
-    if len(text) > MAX_READ_CHARS:
-        text = text[:MAX_READ_CHARS] + "\n\n[...已截断，内容过长...]"
+    full = _read(p)
     header = f"# 出处：{_source_of(p, root)} · {_rel(p, root)}\n\n"
-    return {"content": [{"type": "text", "text": header + text}]}
+
+    # 指定小节：只取那一节（最省上下文）
+    if section:
+        sec = _extract_section(full, section)
+        if sec is None:
+            hs = "；".join(_headings(full)[:20])
+            return {"content": [{"type": "text",
+                    "text": f"未找到小节「{section}」。本篇小节有：{hs}"}], "isError": True}
+        text = sec[:MAX_READ_CHARS] + ("\n\n[...小节过长已截断...]" if len(sec) > MAX_READ_CHARS else "")
+        return {"content": [{"type": "text", "text": header + text}]}
+
+    # 全文：过长则截断并列出小节，引导按小节取
+    if len(full) > MAX_READ_CHARS:
+        hs = "；".join(_headings(full)[:25])
+        text = (full[:MAX_READ_CHARS]
+                + f"\n\n[...全文较长已截断。要看后续，用 kb_read(note, section='小节标题')。"
+                  f"本篇小节：{hs}]")
+        return {"content": [{"type": "text", "text": header + text}]}
+    return {"content": [{"type": "text", "text": header + full}]}

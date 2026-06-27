@@ -14,9 +14,33 @@ from __future__ import annotations
 import json
 import os
 from contextlib import contextmanager
+from datetime import date
+from pathlib import Path
 
 import numpy as np
 from claude_agent_sdk import tool
+
+# 行情缓存目录：日收益序列存这里，不进模型上下文（上下文控制）
+PRICE_CACHE_DIR = Path(__file__).resolve().parent.parent / "portfolio" / "cache" / "prices"
+
+
+def save_price_cache(symbol: str, name: str, source: str, returns: list[float]) -> None:
+    PRICE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    (PRICE_CACHE_DIR / f"{symbol}.json").write_text(
+        json.dumps({"symbol": symbol, "name": name, "source": source,
+                    "fetched": str(date.today()), "daily_returns": returns},
+                   ensure_ascii=False),
+        encoding="utf-8")
+
+
+def load_price_cache(symbol: str) -> dict | None:
+    f = PRICE_CACHE_DIR / f"{symbol}.json"
+    if not f.exists():
+        return None
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        return None
 
 try:
     from mcp.types import ToolAnnotations
@@ -153,14 +177,18 @@ async def get_price_history(args: dict) -> dict:
     arr = np.asarray(returns, dtype=float)
     ann_return = float(arr.mean() * 252)
     ann_vol = float(arr.std(ddof=1) * np.sqrt(252)) if len(arr) > 1 else 0.0
+    name = SAMPLE_NAMES.get(symbol, symbol)
+
+    # 日收益序列存入缓存（不进模型上下文）；只把摘要返回给模型
+    save_price_cache(symbol, name, source, [round(x, 6) for x in arr.tolist()])
 
     payload = {
         "symbol": symbol,
-        "name": SAMPLE_NAMES.get(symbol, symbol),
+        "name": name,
         "source": source,
         "n_days": len(arr),
         "annualized_return": round(ann_return, 4),
         "annualized_volatility": round(ann_vol, 4),
-        "daily_returns": [round(x, 6) for x in arr.tolist()],
+        "note": "日收益序列已缓存；做组合分析/优化时直接传 symbol 即可，无需再贴数字。",
     }
     return {"content": [{"type": "text", "text": json.dumps(payload, ensure_ascii=False)}]}

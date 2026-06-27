@@ -4,6 +4,9 @@
 这些是改动时最容易回归的部分。运行：pytest -q
 """
 
+import tempfile
+import pathlib
+
 import numpy as np
 
 from tools.portfolio import _metrics, _align, _risk_parity, _max_sharpe_montecarlo, TRADING_DAYS
@@ -11,6 +14,7 @@ from tools.market import _make_sample_returns
 from tools.holdings import compute_board, _summary, _find
 from tools.risk import evaluate_risk
 from tools.review import _compare
+import tools.market as market
 
 
 # ── 组合数学 ──────────────────────────────────────────────────────────
@@ -117,3 +121,17 @@ def test_compare_total_and_drift():
     assert c["total_change_pct"] == 25.0
     assert c["class_drift_pct"]["股票/股票基金"] == 10.0
     assert c["class_drift_pct"]["债券/债基"] == -10.0
+
+
+# ── 行情缓存（上下文控制）──────────────────────────────────────────────
+def test_price_cache_roundtrip():
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    market.PRICE_CACHE_DIR = tmp
+    market.save_price_cache("510300", "沪深300ETF", "test", [0.01, -0.02, 0.03])
+    c = market.load_price_cache("510300")
+    assert c is not None
+    assert c["name"] == "沪深300ETF"
+    assert c["daily_returns"] == [0.01, -0.02, 0.03]
+    assert market.load_price_cache("不存在") is None
+    import shutil
+    shutil.rmtree(tmp, ignore_errors=True)
