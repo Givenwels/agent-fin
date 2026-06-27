@@ -26,6 +26,20 @@ except Exception:  # pragma: no cover
 TRADING_DAYS = 252
 
 
+def _returns_from_cache(symbols: list[str]) -> tuple[dict, list[str]]:
+    """从行情缓存按 symbol 取日收益（上下文控制：数字不经过模型）。
+    返回 (returns_data, 缺失的symbols)。缺失的需先调 get_price_history。"""
+    from .market import load_price_cache
+    data, missing = {}, []
+    for s in symbols:
+        c = load_price_cache(s)
+        if c and c.get("daily_returns"):
+            data[s] = c["daily_returns"]
+        else:
+            missing.append(s)
+    return data, missing
+
+
 # ───────────────────────── 公共：把 returns_data 对齐成矩阵 ─────────────────────────
 def _align(symbols: list[str], returns_data: dict) -> tuple[list[str], np.ndarray]:
     """返回 (有效symbols, 形状[T, N] 的日收益矩阵)。按最短长度对齐截断。"""
@@ -63,19 +77,23 @@ def _metrics(port_daily: np.ndarray, rf: float = 0.0) -> dict:
 # ───────────────────────────── 工具 1：组合指标 ─────────────────────────────
 @tool(
     "calc_portfolio_metrics",
-    "给定标的、权重和日收益数据，计算组合的年化收益、年化波动、夏普比率、最大回撤，"
-    "并给出每个标的的风险贡献占比。",
-    {"symbols": list, "weights": list, "returns_data": dict},
+    "给定标的与权重，计算组合的年化收益、年化波动、夏普比率、最大回撤及各标的风险贡献占比。"
+    "日收益数据自动从缓存读取——先对每个标的调 get_price_history 即可，无需传收益数字。",
+    {"symbols": list, "weights": list},
     annotations=_RO,
 )
 async def calc_portfolio_metrics(args: dict) -> dict:
     symbols = list(args.get("symbols") or [])
     weights = np.asarray(args.get("weights") or [], dtype=float)
-    returns_data = dict(args.get("returns_data") or {})
+    returns_data, missing = _returns_from_cache(symbols)
+    if missing:
+        return {"content": [{"type": "text",
+                "text": f"以下标的暂无缓存数据，请先对它们调 get_price_history：{', '.join(missing)}"}],
+                "isError": True}
 
     valid, mat = _align(symbols, returns_data)
     if mat.size == 0:
-        return {"content": [{"type": "text", "text": "错误：returns_data 为空或与 symbols 不匹配。"}],
+        return {"content": [{"type": "text", "text": "错误：无有效收益数据。"}],
                 "isError": True}
     if len(weights) != len(valid):
         return {"content": [{"type": "text",
@@ -141,18 +159,23 @@ def _risk_parity(cov: np.ndarray, iters: int = 5000) -> np.ndarray:
 @tool(
     "optimize_portfolio",
     "按某方法求解一组『参考权重』(用于教育/对比，非买卖建议)。method 取 'mean_variance'(最大夏普) "
-    "或 'risk_parity'(风险平价/各标的风险贡献相等)。返回参考权重与组合指标，供与用户当前持仓对比理解。",
-    {"symbols": list, "returns_data": dict, "method": str},
+    "或 'risk_parity'(风险平价/各标的风险贡献相等)。返回参考权重与组合指标，供与用户当前持仓对比理解。"
+    "日收益自动从缓存读取——先对每个标的调 get_price_history 即可，无需传收益数字。",
+    {"symbols": list, "method": str},
     annotations=_RO,
 )
 async def optimize_portfolio(args: dict) -> dict:
     symbols = list(args.get("symbols") or [])
-    returns_data = dict(args.get("returns_data") or {})
     method = str(args.get("method") or "risk_parity").strip().lower()
+    returns_data, missing = _returns_from_cache(symbols)
+    if missing:
+        return {"content": [{"type": "text",
+                "text": f"以下标的暂无缓存数据，请先对它们调 get_price_history：{', '.join(missing)}"}],
+                "isError": True}
 
     valid, mat = _align(symbols, returns_data)
     if mat.size == 0 or mat.shape[1] < 2:
-        return {"content": [{"type": "text", "text": "错误：至少需要 2 个有效标的的收益数据。"}],
+        return {"content": [{"type": "text", "text": "错误：至少需要 2 个有效标的的缓存数据。"}],
                 "isError": True}
 
     mu = mat.mean(axis=0) * TRADING_DAYS

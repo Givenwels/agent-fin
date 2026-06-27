@@ -72,8 +72,13 @@ ALLOCATION_METHODOLOGY = """
   多来源有分歧时并陈；涉及实时数据/点位需另行核验。
 - 需要真实数据时：宏观环境用 get_macro_indicator（利率/CPI/PMI/M2），"贵不贵"用
   get_valuation（指数 PE/PB 分位）。把知识库的"框架"和这些"实时数据"结合起来判断。
-- 组合计算：get_price_history 取日收益 → optimize_portfolio 求权重 →
-  calc_portfolio_metrics 复核风险贡献。
+- 组合计算：先对每个标的调 get_price_history（收益数据自动进缓存）→ 再 optimize_portfolio /
+  calc_portfolio_metrics 只传 symbols+权重即可，无需也不要贴收益数字。
+
+【上下文卫生·省 token】
+- 读知识库优先 kb_search 定位，再 kb_read 时用 section 只取相关小节，别动辄读整篇。
+- 同一份数据（行情/看板/估值）取过一次就别重复取；list_journal 用 limit 控制条数。
+- 不要把大段工具原始输出原样复述给用户，提炼要点即可。
 - 结论遵循「假设→数据/原文→计算→解读」，让用户能复核，而不是只抛一个数字。
 - 涉及"该不该买/卖"时，转为讲清不同选择的风险收益特征，由用户自行决断。
 
