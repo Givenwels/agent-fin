@@ -14,8 +14,11 @@ from prompts import DISCLAIMER
 
 # fin MCP server 暴露的工具全名：mcp__<server>__<tool>
 WORKFLOW_TOOLS = [
+    "mcp__fin__start_financial_workflow",
+    "mcp__fin__final_task_check",
     "mcp__fin__start_allocation",
     "mcp__fin__decision_checklist",
+    "mcp__fin__write_plan",
 ]
 JOURNAL_TOOLS = [
     "mcp__fin__add_journal",

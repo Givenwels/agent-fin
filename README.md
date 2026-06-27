@@ -1,8 +1,8 @@
-# agent_fin — 资产配置投研 Agent（起步骨架）
+# agent_fin — 本地金融投研 Agent（资产配置 / 风险体检 / 复盘）
 
-用 Anthropic 官方 **Claude Agent SDK（Python）** 搭的最小可跑 agent。
-目的有两个：① 给你一个能动的资产配置 agent 起点；② 每个文件都对照
-`claude-code-sourcemap` 源码里的范式，让骨架本身就是**学习材料**。
+用 Anthropic 官方 **Claude Agent SDK（Python）** 搭的本地金融 agent 工具。
+它不是只会聊天的问答 bot，而是有持仓、记忆、知识库、工作流、风险体检和复盘闭环的投研助手；
+同时每个核心文件仍对照 `claude-code-sourcemap` 源码范式，方便学习 agent 架构。
 
 > ⚠️ 合规边界：本项目是**投研分析 / 投资者教育**工具，输出方法与分析，
 > **不构成投资建议**，不替你下单。详见 `prompts.py` 里的 `DISCLAIMER`。
@@ -26,10 +26,10 @@ python main.py
 需要 `ANTHROPIC_API_KEY`：复制 `.env.example` 为 `.env` 填入即可（main.py 启动自动加载）；
 若本机已用 `claude` 登录，也可走已有登录态。
 
-启动后会先问 `回车=新会话；输入 c 接上上次对话`。
+默认新会话，打开直接问。想接上次对话历史：启动时加 `-c`（`run.bat -c` 或 `python main.py -c`）。
 
 **交互命令**（本地直接执行，不耗 token）：
-`/help` · `/portfolio` 看持仓 · `/journal` 看日记 · `/memory` · `/sources` · `/cost` 看用量 · `exit` 退出（退出时自动整理记忆）。
+`/help` · `/portfolio` 看持仓 · `/plan` 看当前任务计划 · `/journal` 看日记 · `/memory` · `/sources` · `/cost` 看用量 · `exit` 退出（退出时自动整理记忆）。
 
 **重装/换机时**：`conda create -n finagent python=3.11 -y` → `pip install -r requirements.txt`。
 
@@ -135,9 +135,18 @@ agent_fin/
 ├── agents.py        # 子 agent：macro-analyst（宏观）/ risk-profiler（测评）/ allocator（配置）
 ├── memory/          # agent 私有记忆区（自动生成，跨会话持久）
 ├── playbooks/
-│   └── allocation.md # 一键资产配置 8 步流程（≈ skill）
+│   ├── allocation.md # 一键资产配置流程（≈ skill）
+│   └── decision_checklist.md # 买卖前纪律清单
 ├── watch.py         # 定时风险监控（主动型，不依赖 LLM）：可挂系统计划任务
 └── tools/
+    ├── workflows.py # start_financial_workflow：复杂金融任务合同
+    ├── checks.py    # final_task_check：最终完成度/护栏检查
+    ├── planner.py   # write_plan：显式任务计划（/plan 可查看）
+    ├── holdings.py  # 持仓录入/更新/看板
+    ├── risk.py      # diagnose_risk：结构性风险诊断
+    ├── orders.py    # generate_order_list：手动调仓参考清单
+    ├── journal.py   # 投资日记
+    ├── review.py    # 周/月复盘数据汇总
     ├── playbook.py  # start_allocation：加载配置流程（≈ skills 触发加载）
     ├── memory.py    # save_memory/recall/forget + load_memory_block（≈ CLAUDE.md 机制）
     ├── knowledge.py # kb_index/kb_search/kb_read：直读 Obsidian 笔记（≈ Glob/Grep/Read）
@@ -146,16 +155,22 @@ agent_fin/
     └── portfolio.py # calc_portfolio_metrics / optimize_portfolio（纯numpy）
 ```
 
-**12 个工具，分 5 组**：工作流(start_allocation) · 记忆(3) · 知识库(3) · 数据(get_macro_indicator/
-get_valuation) · 量化(get_price_history/calc_portfolio_metrics/optimize_portfolio)。
+**27 个工具，分 8 组**：金融工作流(start_financial_workflow/final_task_check) · 显式计划(write_plan) ·
+持仓与看板 · 风险诊断与调仓清单 · 投资日记与复盘 · 记忆 · 知识库 · 数据与量化。
+复杂任务会先写计划，可用 `/plan` 查看当前步骤；最终回答前会做 `final_task_check`，
+防止漏掉风险画像、数据来源、持仓对比、手动执行边界和免责声明。
 
 **主动监控（定时风险体检）**：`python watch.py` 跑一次，读已存持仓→跑风险规则+对比上次快照→
 有风险就写 `portfolio/alerts/latest.md`，**下次打开 agent 会主动提示你**。不依赖 LLM，可挂
 Windows 任务计划程序每天自动跑（命令见 `watch.py` 顶部注释）。退出码=风险条数。
 
-**一键资产配置**：对 agent 说"帮我做套资产配置"，它会调 `start_allocation` 加载流程，然后自主走完
-8 步——测风险→判宏观（检索知识库）→定大类（矛/盾四层）→取数→优化→算指标→给再平衡规则与证伪条件→存档。
+**一键资产配置**：对 agent 说"帮我做套资产配置"，它会先调 `start_financial_workflow` 建立任务合同，
+再调 `start_allocation` 加载流程，然后自主走完——测风险→判宏观（检索知识库）→定大类（矛/盾四层）
+→取数→优化→算指标→给再平衡规则与证伪条件→最终自检→存档。
 流程写在 `playbooks/allocation.md`，可直接编辑增删步骤。
+
+**调仓清单**：`generate_order_list` 只生成手动参考，不连接券商、不下单、不碰账户；
+最后操作永远由用户自己在自己的 App 里确认。
 
 ---
 

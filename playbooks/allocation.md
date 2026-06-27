@@ -43,7 +43,13 @@
    调 `list_holdings`，把『参考配置』与用户当前持仓并排对比：哪类偏多、哪类偏少、差异背后的权衡。
    只指出差异与利弊，不说"该买进/该卖出"。
 
-9. **存档**
+9. **最终自检**
+   调 `final_task_check(workflow_type="allocation")`，completed_steps 至少包含：
+   `risk_profile`、`framework_or_macro`、`price_data`、`optimization_or_metrics`、
+   `holdings_comparison`、`rebalance_discipline`、`invalidation_conditions`、`disclaimer`。
+   若检查不通过，先补齐缺项；确实无法完成时在最终输出中说明限制。
+
+10. **存档**
    用 `save_memory`（category=决策，key=配置参考-日期）记下本次参考配置要点，便于以后复盘。
 
 ## 最终输出格式
@@ -61,5 +67,6 @@
 ## 纪律红线
 
 - 每步先报"现在做第 X 步"，让用户看到推理过程。
+- 最终输出前先跑 `final_task_check`，不能跳过必要检查。
 - 数据/工具失败时如实说明并降级（如离线样本），**绝不编数字**。
 - 这是『参考配置』用于教育与对比，**不输出"必须买/必须卖"指令**；给的是基于用户风险画像的权衡，决策由用户做。
