@@ -26,9 +26,23 @@ python main.py
 需要 `ANTHROPIC_API_KEY`：复制 `.env.example` 为 `.env` 填入即可（main.py 启动自动加载）；
 若本机已用 `claude` 登录，也可走已有登录态。
 
-**交互命令**（本地直接执行，不耗 token）：`/help` 帮助 · `/memory` 看记忆 · `/sources` 看知识来源 · `exit` 退出。
+启动后会先问 `回车=新会话；输入 c 接上上次对话`。
+
+**交互命令**（本地直接执行，不耗 token）：
+`/help` · `/portfolio` 看持仓 · `/journal` 看日记 · `/memory` · `/sources` · `/cost` 看用量 · `exit` 退出（退出时自动整理记忆）。
 
 **重装/换机时**：`conda create -n finagent python=3.11 -y` → `pip install -r requirements.txt`。
+
+### ⚠️ 起不来？先查这两个（最常见）
+
+1. **报找不到 bash / CLI 启动失败**：是 `CLAUDE_CODE_GIT_BASH_PATH` 没设或编码乱码。
+   设成你的 Git Bash 路径，例如：
+   ```bat
+   set CLAUDE_CODE_GIT_BASH_PATH=D:\浏览器下载\Git\Git\bin\bash.exe
+   ```
+   （SDK 靠这个 CLI 跑；路径错了就连不上模型。)
+2. **模型**：本项目走环境变量 `ANTHROPIC_MODEL`（当前是 `deepseek-v4-flash`，DeepSeek 兼容端点）。
+   想换模型改这个变量即可，代码不用动。端点偶发慢/超时属正常，重试即可。
 
 试两句：
 - `分析 60% 沪深300ETF(510300) + 40% 国债ETF(511010) 的组合风险`
