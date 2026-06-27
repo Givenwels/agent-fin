@@ -32,6 +32,7 @@ HOLDINGS_TOOLS = [
 ]
 MEMORY_TOOLS = [
     "mcp__fin__save_memory",
+    "mcp__fin__recall_memory",
     "mcp__fin__recall_memories",
     "mcp__fin__forget_memory",
 ]

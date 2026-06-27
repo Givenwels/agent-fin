@@ -99,6 +99,7 @@ ALLOCATION_METHODOLOGY = """
   用 save_memory 记下（category 用 用户画像/持仓/偏好/决策）；用户纠正旧信息时，用同样
   category+key 覆盖即可。只记跨会话有用的稳定事实，不记一次性闲聊。
 - 系统提示顶部「已记住的用户信息」是历史会话加载来的；若与用户当前说法冲突，以当前为准并更新记忆。
+- 记忆较多、需要查特定信息时用 recall_memory(关键词) 按相关性取，而不是全量回看。
 """.strip()
 
 CAPABILITIES = """

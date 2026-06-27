@@ -24,6 +24,7 @@ from .review import review_report
 from .risk import diagnose_risk
 from .memory import (
     save_memory,
+    recall_memory,
     recall_memories,
     forget_memory,
     load_memory_block,
@@ -37,7 +38,7 @@ ALL_TOOLS = [
     add_holding, list_holdings, update_holding, remove_holding, portfolio_dashboard,
     diagnose_risk,
     add_journal, list_journal, review_report,
-    save_memory, recall_memories, forget_memory,
+    save_memory, recall_memory, recall_memories, forget_memory,
     kb_index, kb_search, kb_read,
     get_macro_indicator, get_valuation,
     get_price_history, calc_portfolio_metrics, optimize_portfolio,
@@ -49,7 +50,7 @@ __all__ = [
     "add_holding", "list_holdings", "update_holding", "remove_holding", "portfolio_dashboard",
     "diagnose_risk",
     "add_journal", "list_journal", "review_report",
-    "save_memory", "recall_memories", "forget_memory", "load_memory_block",
+    "save_memory", "recall_memory", "recall_memories", "forget_memory", "load_memory_block",
     "kb_index", "kb_search", "kb_read",
     "get_macro_indicator", "get_valuation",
     "get_price_history", "calc_portfolio_metrics", "optimize_portfolio",
