@@ -15,7 +15,7 @@ import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from claude_agent_sdk import tool
+from .base import tool
 
 from .holdings import _load as _load_holdings, compute_board
 from .journal import _load as _load_journal

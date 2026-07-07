@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from claude_agent_sdk import tool
+from .base import tool
 
 try:
     from mcp.types import ToolAnnotations

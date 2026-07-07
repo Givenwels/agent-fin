@@ -8,9 +8,19 @@
 ═══════════════════════════════════════════════════════════════════════
 """
 
-from claude_agent_sdk import AgentDefinition
+from dataclasses import dataclass, field
 
 from prompts import DISCLAIMER
+
+
+@dataclass
+class AgentDefinition:
+    """子 agent 定义（本地 dataclass，取代 claude_agent_sdk 的同名类）。
+    description=何时用、prompt=system 提示、tools=允许的工具子集（mcp__fin__ 全名）、model 占位。"""
+    description: str
+    prompt: str
+    tools: list = field(default_factory=list)
+    model: str = "inherit"
 
 # fin MCP server 暴露的工具全名：mcp__<server>__<tool>
 WORKFLOW_TOOLS = [
@@ -48,6 +58,7 @@ KB_TOOLS = [
 DATA_TOOLS = [
     "mcp__fin__get_macro_indicator",
     "mcp__fin__get_valuation",
+    "mcp__fin__get_news",
 ]
 QUANT_TOOLS = [
     "mcp__fin__get_price_history",

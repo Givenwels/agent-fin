@@ -17,7 +17,7 @@ import re
 from datetime import date
 from pathlib import Path
 
-from claude_agent_sdk import tool
+from .base import tool
 
 try:
     from mcp.types import ToolAnnotations

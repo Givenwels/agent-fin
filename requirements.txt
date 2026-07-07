@@ -1,11 +1,15 @@
-# 核心：Anthropic 官方 Agent SDK（需要 Python >= 3.10）
-claude-agent-sdk>=0.1.0
+# 核心：OpenAI/Codex + Anthropic-compatible 双 provider。
+# 默认建议用 OpenAI SDK 接 Codex/OpenAI API；Anthropic SDK 保留给兼容端点。
+# 工具用本地 tools/base.py 的 @tool、子 agent 用 agents.py 本地 AgentDefinition，
+# 已彻底去除 claude-agent-sdk 依赖（运行时不再拉起 claude 子进程）。
+openai>=1.0
+anthropic>=0.40
 
 # 计算：组合指标与优化（纯算法，必装）
 numpy>=1.24
 pandas>=2.0
 
-# 读取 .env 里的 ANTHROPIC_API_KEY（main.py 启动时自动加载）
+# 读取 .env 里的 API key / endpoint / model（main.py 启动时自动加载）
 python-dotenv>=1.0
 
 # PDF 文本抽取（把书籍/研报蒸馏进知识库时用）

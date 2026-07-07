@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 
 import numpy as np
-from claude_agent_sdk import tool
+from .base import tool
 
 try:
     from mcp.types import ToolAnnotations

@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 
-from claude_agent_sdk import tool
+from .base import tool
 
 from .holdings import _load, compute_board
 

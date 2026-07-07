@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from claude_agent_sdk import tool
+from .base import tool
 
 from .workflows import resolve_workflow_type, workflow_contract
 

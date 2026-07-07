@@ -7,38 +7,51 @@
 ## 项目事实
 
 ### 项目定位
-个人资产研究、风险监控与投资复盘助理（垂类金融 Agent）。基于 Claude Agent SDK，
+个人资产研究、风险监控与投资复盘助理（垂类金融 Agent）。基于自写 Agent 循环 + Codex/OpenAI API，
 给个人投资者用。不自动下单、不接券商、不给确定性买卖指令、不承诺收益。
 
 ### 技术栈
 - 主语言：Python 3.11（conda 环境 `finagent`）
-- 主框架：claude-agent-sdk 0.2.110（进程内 MCP 工具 + 子 agent）
+- 主框架：**自写 Agent 循环（engine.py）**——直接用 anthropic SDK 打到端点，自己驱动
+  「模型→tool_use→tool_result→再问」的循环（对照 Claude Code 的 query.ts）。
+  运行时**不再拉起 `claude` 子进程**，是真正独立的 Agent。
+- OpenAI/Codex provider：`FIN_API_PROVIDER=codex`，使用 `OPENAI_API_KEY`、`OPENAI_MODEL`、
+  可选 `OPENAI_BASE_URL`，走 OpenAI SDK。
+- Anthropic-compatible provider：保留 `FIN_API_PROVIDER=anthropic` + `ANTHROPIC_*` 兼容路径。
 - 数据库：无（本地文件持久化：JSON 存持仓，markdown 存记忆/日记）
 - 包管理工具：pip
 - 其他关键依赖：numpy / pandas（计算）、akshare（行情/宏观，国内源自动绕代理）、
   pypdf（PDF 抽取）、python-dotenv（读 .env）
-- 模型：走环境变量 `ANTHROPIC_MODEL`（当前 deepseek-v4-flash，DeepSeek 兼容端点）
+- 模型 / 端点：默认走 `OPENAI_MODEL`；需要接入时运行 `python main.py --setup-api`，
+  测试连通运行 `python main.py --test-api`。
 
 ### 目录结构
-- `main.py` — 入口：装配工具/子agent + REPL 循环 + 本地命令（/help /memory /sources）
+- `engine.py` — **Agent 循环核心**：tools→Anthropic schema 转换、客户端构造、run_turn（query.ts 同构）
+- `main.py` — 入口：装配（system+工具）+ REPL 循环 + 本地命令（/help /memory /sources）+ `-c` 续接
 - `prompts.py` — 系统提示：WORLDVIEW + 能力自述 + 方法论 + 合规免责
-- `agents.py` — 子 agent 定义（macro-analyst / risk-profiler / allocator）
-- `tools/` — 工具：knowledge(知识库) / macro(宏观估值) / market(行情) / portfolio(组合计算) / memory / playbook
+- `agents.py` — 子 agent 定义（macro-analyst / risk-profiler / allocator，本地 AgentDefinition）；
+  主循环经 `delegate` 工具委派，engine.run_subagent 用受限工具集独立跑（已接入并验证）
+- `tools/base.py` — 本地 `@tool` 装饰器（取代 claude-agent-sdk，产出同构工具对象）
+- `tools/` — 工具：knowledge(知识库) / macro(宏观估值) / market(行情) / portfolio(组合计算) /
+  memory / playbook / news(实时资讯) / reporting(报告导出+桌面推送)
+- `watch.py` — 定时监控：纯规则快路径；`--agent` 心跳模式让 agent 自主体检+写告警+桌面推送
 - `playbooks/` — 工作流剧本（allocation.md）
 - `memory/` — 用户私有记忆（已 gitignore）
-- `portfolio/` — 用户持仓数据，将建（已 gitignore）
+- `portfolio/` — 用户数据（持仓/快照/告警/reports 导出，已 gitignore）
 
 ### 常用命令
 - 安装依赖：`pip install -r requirements.txt`（在 finagent 环境）
 - 启动开发环境：`python main.py`（或双击 `run.bat`）
-- 跑测试：`pytest -q`（测 tools/ 核心纯逻辑，见 tests/）
+- 主动监控（心跳）：`python watch.py`（纯规则）/ `python watch.py --agent`（agent 自主体检+推送）
+- 跑测试：`pytest -q`（测 tools/ 核心纯逻辑 + 手能力，见 tests/）
 - 代码格式检查 (lint)：暂无
 - 类型检查 (typecheck)：暂无
 - 构建上线版本：无（命令行应用，直接运行）
 
 ### 环境变量与密钥
 - 配置文件：`.env`，示例文件：`.env.example`
-- 敏感字段（严禁出现在代码、commit、日志中）：`ANTHROPIC_API_KEY`
+- 敏感字段（严禁出现在代码、commit、日志中）：`OPENAI_API_KEY`、`CODEX_API_KEY`、
+  `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_API_KEY`
 - 新增密钥时：同步在示例文件加占位符，**不写真值**
 
 ### 不要碰的文件

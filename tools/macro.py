@@ -16,7 +16,7 @@ import json
 from datetime import date, timedelta
 
 import numpy as np
-from claude_agent_sdk import tool
+from .base import tool
 
 from .market import _bypass_proxy  # 复用：国内数据源绕过 Clash 代理
 

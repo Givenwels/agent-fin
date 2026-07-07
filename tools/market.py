@@ -18,7 +18,7 @@ from datetime import date
 from pathlib import Path
 
 import numpy as np
-from claude_agent_sdk import tool
+from .base import tool
 
 # 行情缓存目录：日收益序列存这里，不进模型上下文（上下文控制）
 PRICE_CACHE_DIR = Path(__file__).resolve().parent.parent / "portfolio" / "cache" / "prices"

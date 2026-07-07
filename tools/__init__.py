@@ -20,6 +20,8 @@ from .journal import add_journal, list_journal
 from .knowledge import kb_index, kb_search, kb_read
 from .macro import get_macro_indicator, get_valuation
 from .market import get_price_history, SAMPLE_RETURNS
+from .news import get_news
+from .reporting import export_report, push_notification
 from .review import review_report
 from .risk import diagnose_risk
 from .orders import generate_order_list
@@ -45,8 +47,9 @@ ALL_TOOLS = [
     add_journal, list_journal, review_report,
     save_memory, recall_memory, recall_memories, forget_memory,
     kb_index, kb_search, kb_read,
-    get_macro_indicator, get_valuation,
+    get_macro_indicator, get_valuation, get_news,
     get_price_history, calc_portfolio_metrics, optimize_portfolio,
+    export_report, push_notification,
 ]
 
 __all__ = [
@@ -58,7 +61,8 @@ __all__ = [
     "add_journal", "list_journal", "review_report",
     "save_memory", "recall_memory", "recall_memories", "forget_memory", "load_memory_block",
     "kb_index", "kb_search", "kb_read",
-    "get_macro_indicator", "get_valuation",
+    "get_macro_indicator", "get_valuation", "get_news",
     "get_price_history", "calc_portfolio_metrics", "optimize_portfolio",
+    "export_report", "push_notification",
     "SAMPLE_RETURNS",
 ]
