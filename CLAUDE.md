@@ -12,7 +12,7 @@
 
 ### 技术栈
 - 主语言：Python 3.11（conda 环境 `finagent`）
-- 主框架：**自写 Agent 循环（engine.py）**——直接用 anthropic SDK 打到端点，自己驱动
+- 主框架：**自写 Agent 循环（engine.py）**——默认用 OpenAI SDK 接 Codex/OpenAI API，自己驱动
   「模型→tool_use→tool_result→再问」的循环（对照 Claude Code 的 query.ts）。
   运行时**不再拉起 `claude` 子进程**，是真正独立的 Agent。
 - OpenAI/Codex provider：`FIN_API_PROVIDER=codex`，使用 `OPENAI_API_KEY`、`OPENAI_MODEL`、
@@ -27,7 +27,8 @@
 
 ### 目录结构
 - `engine.py` — **Agent 循环核心**：tools→Anthropic schema 转换、客户端构造、run_turn（query.ts 同构）
-- `main.py` — 入口：装配（system+工具）+ REPL 循环 + 本地命令（/help /memory /sources）+ `-c` 续接
+- `context_manager.py` — 上下文统计/压缩：长会话压成历史摘要，避免孤立 tool 结果续接
+- `main.py` — 入口：装配（system+工具+相关记忆）+ REPL 循环 + 本地命令（/help /context /memory /sources）+ `-c` 续接
 - `prompts.py` — 系统提示：WORLDVIEW + 能力自述 + 方法论 + 合规免责
 - `agents.py` — 子 agent 定义（macro-analyst / risk-profiler / allocator，本地 AgentDefinition）；
   主循环经 `delegate` 工具委派，engine.run_subagent 用受限工具集独立跑（已接入并验证）

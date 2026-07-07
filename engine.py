@@ -1,8 +1,8 @@
 """自写 Agent 循环——本项目的心脏（对照 Claude Code 的 query.ts）。
 
 不再依赖 claude-agent-sdk 的运行时（那套底层会拉起 `claude` 子进程当引擎）。
-这里直接用 anthropic SDK 打到配置的端点（当前 OpenRouter 暴露的 Anthropic 原生
-协议），自己驱动这条循环：
+这里默认用 OpenAI SDK 接 Codex/OpenAI provider，同时保留 Anthropic-compatible
+provider，自己驱动这条循环：
 
     模型输出 → 若要求 tool_use → 本地执行工具 → 把 tool_result 塞回 → 再问模型
     → 直到模型不再要工具、给出最终回答（stop_reason != "tool_use"）。
@@ -10,15 +10,15 @@
 工具复用 tools/ 里用 @tool 定义好的对象（暴露 .name/.description/.input_schema/
 .handler），无需改动任何业务逻辑。
 
-实测约束（见提交记录）：
-- 端点鉴权走 Bearer：用 auth_token=（不要 api_key=，那会发 x-api-key，OpenRouter 不认）。
-- 该端点的流式不可靠（返回 0 个 text_delta），故用非流式 create()。
+工具执行层提供超时、输出截断和结构化事件，避免单个工具拖死回合或把上下文撑爆。
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -35,6 +35,8 @@ _JSON_TYPE = {
 }
 
 DEFAULT_MAX_TOKENS = 4096
+DEFAULT_TOOL_TIMEOUT_SECONDS = 30.0
+DEFAULT_TOOL_OUTPUT_CHARS = 6000
 
 
 @dataclass
@@ -47,6 +49,21 @@ class AgentClient:
         close = getattr(self.raw, "close", None)
         if close:
             await close()
+
+
+@dataclass
+class ToolExecution:
+    """A single local tool execution event."""
+    name: str
+    args: dict
+    text: str
+    is_error: bool
+    duration_ms: int
+    truncated: bool = False
+
+    @property
+    def ok(self) -> bool:
+        return not self.is_error
 
 
 def build_tool_schemas(tools) -> list[dict]:
@@ -166,17 +183,74 @@ def _blocks_to_dicts(content) -> list[dict]:
     return out
 
 
-async def _run_tool(name: str, args: dict, tool_by_name: dict) -> tuple[str, bool]:
-    """执行一个工具，返回（文本结果, 是否出错）。"""
+def _tool_timeout_seconds() -> float:
+    try:
+        return float(os.environ.get("FIN_TOOL_TIMEOUT_SECONDS") or DEFAULT_TOOL_TIMEOUT_SECONDS)
+    except Exception:
+        return DEFAULT_TOOL_TIMEOUT_SECONDS
+
+
+def _tool_output_chars() -> int:
+    try:
+        return int(os.environ.get("FIN_TOOL_OUTPUT_CHARS") or DEFAULT_TOOL_OUTPUT_CHARS)
+    except Exception:
+        return DEFAULT_TOOL_OUTPUT_CHARS
+
+
+def _extract_tool_text(result: dict) -> str:
+    content = (result or {}).get("content") or []
+    if not content:
+        return ""
+    first = content[0] if isinstance(content, list) else content
+    if isinstance(first, dict):
+        return str(first.get("text", ""))
+    return str(first)
+
+
+def _limit_tool_text(text: str, max_chars: int) -> tuple[str, bool]:
+    text = str(text or "")
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text, False
+    suffix = f"\n\n[工具输出过长，已截断到 {max_chars} 字符；如需完整内容，请缩小查询范围或导出报告。]"
+    keep = max(0, max_chars - len(suffix))
+    return text[:keep] + suffix, True
+
+
+async def _execute_tool(
+    name: str,
+    args: dict,
+    tool_by_name: dict,
+    *,
+    max_output_chars: int | None = None,
+    timeout_seconds: float | None = None,
+) -> ToolExecution:
+    """Execute one tool with timeout, truncation, and structured telemetry."""
+    t0 = time.perf_counter()
     tool = tool_by_name.get(name)
     if tool is None:
-        return f"未知工具：{name}", True
+        return ToolExecution(name, args or {}, f"未知工具：{name}", True, 0)
     try:
-        res = await tool.handler(args or {})
-        text = res["content"][0]["text"]
-        return text, bool(res.get("isError"))
+        timeout = _tool_timeout_seconds() if timeout_seconds is None else timeout_seconds
+        res = await asyncio.wait_for(tool.handler(args or {}), timeout=timeout)
+        text = _extract_tool_text(res)
+        text, truncated = _limit_tool_text(
+            text,
+            _tool_output_chars() if max_output_chars is None else max_output_chars,
+        )
+        dur = int((time.perf_counter() - t0) * 1000)
+        return ToolExecution(name, args or {}, text, bool(res.get("isError")), dur, truncated)
+    except asyncio.TimeoutError:
+        dur = int((time.perf_counter() - t0) * 1000)
+        return ToolExecution(name, args or {}, f"工具执行超时：{name}", True, dur)
     except Exception as e:
-        return f"工具执行出错：{type(e).__name__}: {e}", True
+        dur = int((time.perf_counter() - t0) * 1000)
+        return ToolExecution(name, args or {}, f"工具执行出错：{type(e).__name__}: {e}", True, dur)
+
+
+async def _run_tool(name: str, args: dict, tool_by_name: dict) -> tuple[str, bool]:
+    """执行一个工具，返回（文本结果, 是否出错）。"""
+    result = await _execute_tool(name, args, tool_by_name)
+    return result.text, result.is_error
 
 
 async def run_turn(
@@ -185,6 +259,7 @@ async def run_turn(
     messages: list[dict],
     on_text=None,
     on_tool=None,
+    on_tool_result=None,
     *,
     model: str | None = None,
     max_tokens: int = DEFAULT_MAX_TOKENS,
@@ -206,6 +281,7 @@ async def run_turn(
     if isinstance(client, AgentClient) and client.provider == "codex":
         return await _run_turn_codex(
             client, client.raw, system, messages, on_text, on_tool,
+            on_tool_result=on_tool_result,
             model=model, max_tokens=max_tokens,
             tools_schema=tools_schema, tool_by_name=tool_by_name,
             allow_delegate=allow_delegate, max_iters=max_iters,
@@ -250,13 +326,22 @@ async def run_turn(
                 agent = (b.input or {}).get("agent", "")
                 if on_tool:
                     on_tool(f"delegate→{agent}")
+                t0 = time.perf_counter()
                 text = await run_subagent(client, agent, (b.input or {}).get("task", ""),
                                           on_tool=on_tool, model=model)
                 is_err = False
+                if on_tool_result:
+                    on_tool_result(ToolExecution(
+                        f"delegate→{agent}", b.input or {}, text, False,
+                        int((time.perf_counter() - t0) * 1000),
+                    ))
             else:
                 if on_tool:
                     on_tool(b.name)
-                text, is_err = await _run_tool(b.name, b.input, by_name)
+                result = await _execute_tool(b.name, b.input, by_name)
+                text, is_err = result.text, result.is_error
+                if on_tool_result:
+                    on_tool_result(result)
             results.append({
                 "type": "tool_result",
                 "tool_use_id": b.id,
@@ -337,6 +422,7 @@ async def _run_turn_codex(
     messages: list[dict],
     on_text=None,
     on_tool=None,
+    on_tool_result=None,
     *,
     model: str | None = None,
     max_tokens: int = DEFAULT_MAX_TOKENS,
@@ -403,12 +489,21 @@ async def _run_turn_codex(
                 agent = args.get("agent", "")
                 if on_tool:
                     on_tool(f"delegate→{agent}")
+                t0 = time.perf_counter()
                 out_text = await run_subagent(provider_client, agent, args.get("task", ""),
                                               on_tool=on_tool, model=model)
+                if on_tool_result:
+                    on_tool_result(ToolExecution(
+                        f"delegate→{agent}", args, out_text, False,
+                        int((time.perf_counter() - t0) * 1000),
+                    ))
             else:
                 if on_tool:
                     on_tool(name)
-                out_text, _is_err = await _run_tool(name, args, by_name)
+                result = await _execute_tool(name, args, by_name)
+                out_text = result.text
+                if on_tool_result:
+                    on_tool_result(result)
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": out_text})
 
 

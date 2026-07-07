@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -29,6 +30,20 @@ except Exception:  # pragma: no cover
 
 MEMORY_DIR = Path(__file__).resolve().parent.parent / "memory"
 CATEGORIES = ["用户画像", "持仓", "偏好", "决策", "其他"]
+COMMON_TERMS = [
+    "低回撤", "回撤", "风险", "风险偏好", "波动", "现金", "债券基金", "债券", "债基",
+    "宽基指数", "宽基", "指数", "科技基金", "科技", "黄金", "持仓", "配置", "目标",
+    "偏好", "决策", "复盘", "退休", "教育金", "长期", "短期",
+]
+
+
+@dataclass
+class MemoryRecord:
+    category: str
+    key: str
+    body: str
+    updated: str
+    path: Path
 
 
 # ── 公共辅助 ──────────────────────────────────────────────────────────
@@ -46,13 +61,14 @@ def _all_files() -> list[Path]:
     return sorted(MEMORY_DIR.glob("*.md"))
 
 
-def _parse(p: Path) -> tuple[str, str, str]:
-    """解析记忆文件 → (category, key, body)。"""
+def _parse_record(p: Path) -> MemoryRecord:
+    """解析记忆文件。"""
     try:
         text = p.read_text(encoding="utf-8")
     except Exception:
-        return "其他", p.stem, ""
+        return MemoryRecord("其他", p.stem, "", "", p)
     cat = key = ""
+    updated = ""
     body = text
     m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.S)
     if m:
@@ -62,22 +78,88 @@ def _parse(p: Path) -> tuple[str, str, str]:
                 cat = line.split(":", 1)[1].strip()
             elif line.startswith("key:"):
                 key = line.split(":", 1)[1].strip()
-    return cat or "其他", key or p.stem, body.strip()
+            elif line.startswith("updated:"):
+                updated = line.split(":", 1)[1].strip()
+    return MemoryRecord(cat or "其他", key or p.stem, body.strip(), updated, p)
 
 
-def load_memory_block() -> str:
+def _parse(p: Path) -> tuple[str, str, str]:
+    """解析记忆文件 → (category, key, body)。保留给旧调用方。"""
+    r = _parse_record(p)
+    return r.category, r.key, r.body
+
+
+def _all_records() -> list[MemoryRecord]:
+    return [_parse_record(p) for p in _all_files()]
+
+
+def _query_terms(query: str) -> list[str]:
+    text = str(query or "").strip().lower()
+    terms = [t for t in re.split(r"\s+", text) if len(t) >= 2]
+    terms.extend(t.lower() for t in COMMON_TERMS if t in text)
+    seen = []
+    for term in terms:
+        if term and term not in seen:
+            seen.append(term)
+    return seen
+
+
+def _score(record: MemoryRecord, terms: list[str]) -> int:
+    key_blob = f"{record.category} {record.key}".lower()
+    body_blob = record.body.lower()
+    score = 0
+    for term in terms:
+        if term in key_blob:
+            score += 4
+        if term in body_blob:
+            score += 2
+    return score
+
+
+def search_memories(query: str, limit: int = 8) -> list[MemoryRecord]:
+    terms = _query_terms(query)
+    if not terms:
+        return []
+    hits = []
+    for record in _all_records():
+        score = _score(record, terms)
+        if score:
+            hits.append((score, record.updated, record))
+    hits.sort(key=lambda x: (-x[0], x[1]), reverse=False)
+    return [r for _score_value, _updated, r in hits[: max(1, int(limit or 8))]]
+
+
+def _format_record(record: MemoryRecord, *, max_body: int = 120) -> str:
+    one = " ".join(record.body.split())
+    if len(one) > max_body:
+        one = one[:max_body] + "…"
+    stamp = f" (updated={record.updated})" if record.updated else ""
+    return f"[{record.category}/{record.key}]{stamp} {one}"
+
+
+def load_memory_block(max_items: int = 18, max_body: int = 120) -> str:
     """启动时调用：把全部记忆拼成一段，注入系统提示（≈ 加载 CLAUDE.md）。"""
-    files = _all_files()
-    if not files:
+    records = _all_records()
+    if not records:
         return ("\n\n【已记住的用户信息】暂无。随着对话，了解到你的风险画像/持仓/偏好/"
                 "重要决策时，我会用 save_memory 记下，下次自动想起。")
-    lines = ["\n\n【已记住的用户信息】（来自历史会话，自动加载；若与现状不符请直接纠正我）"]
-    for p in files:
-        cat, key, body = _parse(p)
-        one = " ".join(body.split())
-        if len(one) > 120:
-            one = one[:120] + "…"
-        lines.append(f"- [{cat}/{key}] {one}")
+    lines = [
+        "\n\n【已记住的用户信息】（来自历史会话，自动加载；若与现状不符请直接纠正我）"
+    ]
+    for record in records[:max_items]:
+        lines.append("- " + _format_record(record, max_body=max_body))
+    if len(records) > max_items:
+        lines.append(f"- 另有 {len(records) - max_items} 条记忆，必要时用 recall_memory 按关键词检索。")
+    return "\n".join(lines)
+
+
+def load_relevant_memory_block(query: str, limit: int = 6) -> str:
+    """按当前用户问题取相关记忆，作为本轮额外上下文。"""
+    hits = search_memories(query, limit=limit)
+    if not hits:
+        return ""
+    lines = ["\n\n【本轮相关记忆】（按当前问题检索；若与用户当前说法冲突，以当前为准）"]
+    lines.extend("- " + _format_record(r, max_body=180) for r in hits)
     return "\n".join(lines)
 
 
@@ -118,17 +200,13 @@ async def recall_memory(args: dict) -> dict:
     kws = [k for k in re.split(r"\s+", str(args.get("query", "")).strip()) if k]
     if not kws:
         return {"content": [{"type": "text", "text": "错误：query 不能为空。"}], "isError": True}
-    hits = []
-    for p in _all_files():
-        cat, key, body = _parse(p)
-        blob = f"{cat} {key} {body}".lower()
-        score = sum(1 for k in kws if k.lower() in blob)
-        if score:
-            hits.append((score, f"[{cat}/{key}] {body}"))
+    limit = int(args.get("limit") or 8)
+    hits = search_memories(" ".join(kws), limit=limit)
     if not hits:
         return {"content": [{"type": "text", "text": f"没有匹配「{' '.join(kws)}」的记忆。"}]}
-    hits.sort(key=lambda x: -x[0])
-    return {"content": [{"type": "text", "text": "\n".join(h[1] for h in hits[:8])}]}
+    return {"content": [{"type": "text", "text": "\n".join(
+        _format_record(h, max_body=500) for h in hits
+    )}]}
 
 
 @tool(
