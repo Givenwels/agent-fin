@@ -135,3 +135,64 @@ def test_execute_tool_times_out():
     assert result.ok is False
     assert result.is_error is True
     assert "超时" in result.text
+
+
+def test_execute_tool_rejects_missing_required_args():
+    async def needs_code(_args):
+        return {"content": [{"type": "text", "text": "should not run"}]}
+
+    tool = ToolDef("needs_code", "needs a code", {"code": str}, needs_code)
+    result = asyncio.run(engine._execute_tool(
+        "needs_code", {}, {"needs_code": tool}, max_output_chars=100, timeout_seconds=1
+    ))
+
+    assert result.ok is False
+    assert "工具参数错误" in result.text
+    assert "code" in result.text
+
+
+def test_execute_tool_coerces_simple_scalar_args():
+    seen = {}
+
+    async def capture(args):
+        seen.update(args)
+        return {"content": [{"type": "text", "text": "ok"}]}
+
+    tool = ToolDef("capture", "capture args", {"amount": float, "name": str}, capture)
+    result = asyncio.run(engine._execute_tool(
+        "capture", {"amount": "3.5", "name": 510300}, {"capture": tool},
+        max_output_chars=100, timeout_seconds=1,
+    ))
+
+    assert result.ok is True
+    assert seen == {"amount": 3.5, "name": "510300"}
+
+
+def test_tool_catalog_groups_and_renders_tools():
+    import tool_catalog
+
+    rows = tool_catalog.catalog_tools([
+        ToolDef("kb_search", "search docs", {"query": str}, lambda _a: None),
+        ToolDef("save_memory", "save memory", {"key": str}, lambda _a: None),
+    ])
+    rendered = tool_catalog.render_tool_catalog(rows)
+
+    assert rows[0]["group"] == "知识库"
+    assert rows[1]["group"] == "记忆"
+    assert "kb_search" in rendered
+    assert "key:str" in rendered
+
+
+def test_trace_state_keeps_recent_events_and_masks_args():
+    import trace_state
+
+    trace = trace_state.AgentTrace(max_events=2)
+    trace.record(engine.ToolExecution("old_tool", {"api_key": "secret", "x": 1}, "ok", False, 3))
+    trace.record(engine.ToolExecution("b", {}, "bad", True, 4))
+    trace.record(engine.ToolExecution("c", {}, "long", False, 5, truncated=True))
+    rendered = trace.render()
+
+    assert "old_tool" not in rendered
+    assert "b" in rendered and "c" in rendered
+    assert "secret" not in rendered
+    assert "截断" in rendered

@@ -207,6 +207,52 @@ def _extract_tool_text(result: dict) -> str:
     return str(first)
 
 
+def _coerce_tool_value(value: Any, expected: type) -> tuple[Any, str | None]:
+    if expected is str:
+        return str(value), None
+    if expected is int:
+        if isinstance(value, bool):
+            return value, "expected integer, got bool"
+        try:
+            return int(value), None
+        except Exception:
+            return value, f"expected integer, got {type(value).__name__}"
+    if expected is float:
+        if isinstance(value, bool):
+            return value, "expected number, got bool"
+        try:
+            return float(value), None
+        except Exception:
+            return value, f"expected number, got {type(value).__name__}"
+    if expected is bool:
+        if isinstance(value, bool):
+            return value, None
+        if isinstance(value, str) and value.strip().lower() in ("true", "false"):
+            return value.strip().lower() == "true", None
+        return value, f"expected boolean, got {type(value).__name__}"
+    if expected in (list, dict):
+        if isinstance(value, expected):
+            return value, None
+        return value, f"expected {expected.__name__}, got {type(value).__name__}"
+    return value, None
+
+
+def _prepare_tool_args(tool, args: dict) -> tuple[dict, list[str]]:
+    schema = getattr(tool, "input_schema", None) or {}
+    prepared = dict(args or {})
+    errors = []
+    for key, expected in schema.items():
+        if key not in prepared or prepared.get(key) is None:
+            errors.append(f"missing required argument: {key}")
+            continue
+        value, err = _coerce_tool_value(prepared[key], expected)
+        if err:
+            errors.append(f"{key}: {err}")
+        else:
+            prepared[key] = value
+    return prepared, errors
+
+
 def _limit_tool_text(text: str, max_chars: int) -> tuple[str, bool]:
     text = str(text or "")
     if max_chars <= 0 or len(text) <= max_chars:
@@ -229,16 +275,20 @@ async def _execute_tool(
     tool = tool_by_name.get(name)
     if tool is None:
         return ToolExecution(name, args or {}, f"未知工具：{name}", True, 0)
+    prepared_args, arg_errors = _prepare_tool_args(tool, args or {})
+    if arg_errors:
+        text = "工具参数错误：" + "；".join(arg_errors)
+        return ToolExecution(name, args or {}, text, True, 0)
     try:
         timeout = _tool_timeout_seconds() if timeout_seconds is None else timeout_seconds
-        res = await asyncio.wait_for(tool.handler(args or {}), timeout=timeout)
+        res = await asyncio.wait_for(tool.handler(prepared_args), timeout=timeout)
         text = _extract_tool_text(res)
         text, truncated = _limit_tool_text(
             text,
             _tool_output_chars() if max_output_chars is None else max_output_chars,
         )
         dur = int((time.perf_counter() - t0) * 1000)
-        return ToolExecution(name, args or {}, text, bool(res.get("isError")), dur, truncated)
+        return ToolExecution(name, prepared_args, text, bool(res.get("isError")), dur, truncated)
     except asyncio.TimeoutError:
         dur = int((time.perf_counter() - t0) * 1000)
         return ToolExecution(name, args or {}, f"工具执行超时：{name}", True, dur)

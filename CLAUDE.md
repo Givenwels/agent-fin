@@ -28,7 +28,9 @@
 ### 目录结构
 - `engine.py` — **Agent 循环核心**：tools→Anthropic schema 转换、客户端构造、run_turn（query.ts 同构）
 - `context_manager.py` — 上下文统计/压缩：长会话压成历史摘要，避免孤立 tool 结果续接
-- `main.py` — 入口：装配（system+工具+相关记忆）+ REPL 循环 + 本地命令（/help /context /memory /sources）+ `-c` 续接
+- `tool_catalog.py` — 工具目录/能力自描述：`/tools` 查看本地工具分组与参数
+- `trace_state.py` — 会话内工具轨迹：`/trace` 查看最近工具调用，敏感参数遮盖
+- `main.py` — 入口：装配（system+工具+相关记忆）+ REPL 循环 + 本地命令（/help /tools /trace /context /memory /sources）+ `-c` 续接
 - `prompts.py` — 系统提示：WORLDVIEW + 能力自述 + 方法论 + 合规免责
 - `agents.py` — 子 agent 定义（macro-analyst / risk-profiler / allocator，本地 AgentDefinition）；
   主循环经 `delegate` 工具委派，engine.run_subagent 用受限工具集独立跑（已接入并验证）
