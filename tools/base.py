@@ -1,7 +1,7 @@
 """本地 @tool 装饰器——取代 claude_agent_sdk 的同名装饰器，彻底去掉对它的依赖。
 
 `@tool(name, description, input_schema)` 包装一个 async handler，产出一个带
-`.name / .description / .input_schema / .handler` 的对象，与原 `SdkMcpTool` 同构，
+`.name / .description / .input_schema / .required / .risk / .handler` 的对象，与原 `SdkMcpTool` 同构，
 所以 engine.py（按这些属性构造 Anthropic tools 参数并调用 handler）无需任何改动。
 
 input_schema 仍用简化形式 `{"参数名": python_type}`（python_type ∈ str/int/float/bool/list/dict），
@@ -22,9 +22,19 @@ class ToolDef:
     input_schema: dict
     handler: Callable[[dict], Awaitable[dict]]
     annotations: Any = None
+    required: tuple[str, ...] | None = None
+    risk: str = "low"
 
 
-def tool(name: str, description: str, input_schema: dict, annotations: Any = None):
+def tool(
+    name: str,
+    description: str,
+    input_schema: dict,
+    annotations: Any = None,
+    *,
+    required: tuple[str, ...] | list[str] | None = None,
+    risk: str = "low",
+):
     """装饰一个 `async def fn(args: dict) -> dict` 的工具实现。
 
     handler 约定返回 {"content": [{"type": "text", "text": str}], "isError": bool?}（MCP 形态）。
@@ -36,5 +46,7 @@ def tool(name: str, description: str, input_schema: dict, annotations: Any = Non
             input_schema=input_schema,
             handler=fn,
             annotations=annotations,
+            required=tuple(required) if required is not None else None,
+            risk=risk,
         )
     return deco

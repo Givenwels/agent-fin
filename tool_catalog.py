@@ -24,23 +24,42 @@ def tool_group(name: str) -> str:
     return "其他"
 
 
-def _schema_text(schema: dict) -> str:
+def _required_keys(tool) -> set[str]:
+    explicit = getattr(tool, "required", None)
+    if explicit is not None:
+        return set(explicit)
+    return set((getattr(tool, "input_schema", None) or {}).keys())
+
+
+def _risk_level(tool) -> str:
+    if getattr(tool, "risk", "low") == "high":
+        return "high"
+    ann = getattr(tool, "annotations", None)
+    if getattr(ann, "destructiveHint", False):
+        return "high"
+    return "low"
+
+
+def _schema_text(schema: dict, required: set[str]) -> str:
     if not schema:
         return "-"
     parts = []
     for key, typ in schema.items():
         name = getattr(typ, "__name__", str(typ))
-        parts.append(f"{key}:{name}")
+        mark = "" if key in required else "?"
+        parts.append(f"{key}{mark}:{name}")
     return ", ".join(parts)
 
 
 def catalog_tools(tools: Iterable) -> list[dict]:
     rows = []
     for tool in tools:
+        required = _required_keys(tool)
         rows.append({
             "name": tool.name,
             "group": tool_group(tool.name),
-            "schema": _schema_text(getattr(tool, "input_schema", None) or {}),
+            "schema": _schema_text(getattr(tool, "input_schema", None) or {}, required),
+            "risk": _risk_level(tool),
             "description": getattr(tool, "description", ""),
         })
     return sorted(rows, key=lambda r: (r["group"], r["name"]))
@@ -56,6 +75,8 @@ def render_tool_catalog(rows: list[dict], *, include_description: bool = False) 
             current = row["group"]
             lines.append(f"\n【{current}】")
         line = f"- {row['name']}({row['schema']})"
+        if row.get("risk") == "high":
+            line += " [高风险]"
         if include_description and row.get("description"):
             line += f"：{row['description']}"
         lines.append(line)

@@ -134,6 +134,7 @@ def _pick_value_column(df, metric: str):
     "沪深300/上证50/中证500/创业板指/科创50；metric 取 PE 或 PB。",
     {"symbol": str, "metric": str},
     annotations=_RO,
+    required=(),
 )
 async def get_valuation(args: dict) -> dict:
     symbol = str(args.get("symbol", "")).strip() or "沪深300"

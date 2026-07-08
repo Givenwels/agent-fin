@@ -87,6 +87,7 @@ def _entries_in_period(days: int) -> list[dict]:
     "传 7(周)/30(月)。返回结构化数据，你据此写一份复盘报告。用户说'帮我做周/月复盘'时调用。",
     {"period_days": int},
     annotations=_RO,
+    required=(),
 )
 async def review_report(args: dict) -> dict:
     items = _load_holdings()

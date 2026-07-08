@@ -170,6 +170,7 @@ def load_relevant_memory_block(query: str, limit: int = 6) -> str:
     "key 是简短标识（如 风险等级、目标、现有持仓）。同 category+key 再存即覆盖（用于纠正旧信息）。",
     {"category": str, "key": str, "content": str},
     annotations=_WRITE,
+    required=("key", "content"),
 )
 async def save_memory(args: dict) -> dict:
     category = str(args.get("category", "其他")).strip() or "其他"
@@ -232,6 +233,8 @@ async def recall_memories(args: dict) -> dict:
     "删除一条记忆（用户信息过期/错误时）。需提供 category 和 key。",
     {"category": str, "key": str},
     annotations=_DEL,
+    required=("category", "key"),
+    risk="high",
 )
 async def forget_memory(args: dict) -> dict:
     category = str(args.get("category", "其他")).strip() or "其他"

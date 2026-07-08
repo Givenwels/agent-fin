@@ -163,6 +163,7 @@ def _risk_parity(cov: np.ndarray, iters: int = 5000) -> np.ndarray:
     "日收益自动从缓存读取——先对每个标的调 get_price_history 即可，无需传收益数字。",
     {"symbols": list, "method": str},
     annotations=_RO,
+    required=("symbols",),
 )
 async def optimize_portfolio(args: dict) -> dict:
     symbols = list(args.get("symbols") or [])

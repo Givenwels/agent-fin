@@ -256,6 +256,7 @@ def workflow_contract(workflow_type: str, context: str = "") -> dict:
     "返回计划步骤、建议工具、完成检查项和金融护栏。它不执行任务，只给 agent 一个必须遵守的任务合同。",
     {"workflow_type": str, "context": str},
     annotations=_RO,
+    required=("workflow_type",),
 )
 async def start_financial_workflow(args: dict) -> dict:
     payload = workflow_contract(args.get("workflow_type", ""), args.get("context", ""))

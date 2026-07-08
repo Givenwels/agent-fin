@@ -82,6 +82,7 @@ def notify(title: str, message: str) -> bool:
     "title=文件主题；content=正文（Markdown）；fmt 取 md 或 txt。用户说『导出/存成文件/保存这份报告』时调用。",
     {"title": str, "content": str, "fmt": str},
     annotations=_WRITE,
+    required=("title", "content"),
 )
 async def export_report(args: dict) -> dict:
     title = str(args.get("title", "report")).strip() or "report"
@@ -104,6 +105,7 @@ async def export_report(args: dict) -> dict:
     "title=标题；message=正文。best-effort：弹不出也不报错。不发邮件/不发外部消息。",
     {"title": str, "message": str},
     annotations=_RO,
+    required=("message",),
 )
 async def push_notification(args: dict) -> dict:
     title = str(args.get("title", "金融投研助手")).strip() or "金融投研助手"

@@ -66,14 +66,21 @@ class ToolExecution:
         return not self.is_error
 
 
+def _required_keys(tool) -> tuple[str, ...]:
+    explicit = getattr(tool, "required", None)
+    if explicit is not None:
+        return tuple(explicit)
+    return tuple((getattr(tool, "input_schema", None) or {}).keys())
+
+
 def build_tool_schemas(tools) -> list[dict]:
     """把 @tool 对象列表转成 Anthropic Messages API 的 tools 参数。"""
     schemas = []
     for t in tools:
-        props, required = {}, []
+        props = {}
         for key, pytype in (getattr(t, "input_schema", None) or {}).items():
             props[key] = {"type": _JSON_TYPE.get(pytype, "string")}
-            required.append(key)
+        required = list(_required_keys(t))
         schemas.append({
             "name": t.name,
             "description": t.description,
@@ -239,11 +246,13 @@ def _coerce_tool_value(value: Any, expected: type) -> tuple[Any, str | None]:
 
 def _prepare_tool_args(tool, args: dict) -> tuple[dict, list[str]]:
     schema = getattr(tool, "input_schema", None) or {}
+    required = set(_required_keys(tool))
     prepared = dict(args or {})
     errors = []
     for key, expected in schema.items():
         if key not in prepared or prepared.get(key) is None:
-            errors.append(f"missing required argument: {key}")
+            if key in required:
+                errors.append(f"missing required argument: {key}")
             continue
         value, err = _coerce_tool_value(prepared[key], expected)
         if err:
@@ -251,6 +260,13 @@ def _prepare_tool_args(tool, args: dict) -> tuple[dict, list[str]]:
         else:
             prepared[key] = value
     return prepared, errors
+
+
+def _is_high_risk_tool(tool) -> bool:
+    if getattr(tool, "risk", "low") == "high":
+        return True
+    ann = getattr(tool, "annotations", None)
+    return bool(getattr(ann, "destructiveHint", False))
 
 
 def _limit_tool_text(text: str, max_chars: int) -> tuple[str, bool]:
@@ -269,6 +285,7 @@ async def _execute_tool(
     *,
     max_output_chars: int | None = None,
     timeout_seconds: float | None = None,
+    approval_callback=None,
 ) -> ToolExecution:
     """Execute one tool with timeout, truncation, and structured telemetry."""
     t0 = time.perf_counter()
@@ -279,6 +296,15 @@ async def _execute_tool(
     if arg_errors:
         text = "工具参数错误：" + "；".join(arg_errors)
         return ToolExecution(name, args or {}, text, True, 0)
+    if _is_high_risk_tool(tool):
+        if approval_callback is None:
+            return ToolExecution(name, prepared_args, f"高风险工具需要用户确认：{name}", True, 0)
+        approved, reason = approval_callback(name, prepared_args, tool)
+        if not approved:
+            text = f"用户拒绝执行高风险工具：{name}"
+            if reason:
+                text += f"（{reason}）"
+            return ToolExecution(name, prepared_args, text, True, 0)
     try:
         timeout = _tool_timeout_seconds() if timeout_seconds is None else timeout_seconds
         res = await asyncio.wait_for(tool.handler(prepared_args), timeout=timeout)
@@ -310,6 +336,7 @@ async def run_turn(
     on_text=None,
     on_tool=None,
     on_tool_result=None,
+    approval_callback=None,
     *,
     model: str | None = None,
     max_tokens: int = DEFAULT_MAX_TOKENS,
@@ -332,6 +359,7 @@ async def run_turn(
         return await _run_turn_codex(
             client, client.raw, system, messages, on_text, on_tool,
             on_tool_result=on_tool_result,
+            approval_callback=approval_callback,
             model=model, max_tokens=max_tokens,
             tools_schema=tools_schema, tool_by_name=tool_by_name,
             allow_delegate=allow_delegate, max_iters=max_iters,
@@ -388,7 +416,9 @@ async def run_turn(
             else:
                 if on_tool:
                     on_tool(b.name)
-                result = await _execute_tool(b.name, b.input, by_name)
+                result = await _execute_tool(
+                    b.name, b.input, by_name, approval_callback=approval_callback
+                )
                 text, is_err = result.text, result.is_error
                 if on_tool_result:
                     on_tool_result(result)
@@ -473,6 +503,7 @@ async def _run_turn_codex(
     on_text=None,
     on_tool=None,
     on_tool_result=None,
+    approval_callback=None,
     *,
     model: str | None = None,
     max_tokens: int = DEFAULT_MAX_TOKENS,
@@ -550,7 +581,9 @@ async def _run_turn_codex(
             else:
                 if on_tool:
                     on_tool(name)
-                result = await _execute_tool(name, args, by_name)
+                result = await _execute_tool(
+                    name, args, by_name, approval_callback=approval_callback
+                )
                 out_text = result.text
                 if on_tool_result:
                     on_tool_result(result)

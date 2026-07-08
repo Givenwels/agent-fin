@@ -42,6 +42,7 @@ def _match(items: list[dict], key: str):
     "纯计算，不下单、不碰账户。",
     {"target_weights": dict, "total_amount": float},
     annotations=_RO,
+    required=("target_weights",),
 )
 async def generate_order_list(args: dict) -> dict:
     tw = dict(args.get("target_weights") or {})

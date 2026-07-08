@@ -100,6 +100,16 @@ async def ask(client, system: str, messages: list[dict], stats: dict) -> None:
         if trace:
             trace.record(event)
 
+    def approve_tool(name: str, args: dict, tool) -> tuple[bool, str]:
+        safe_args = trace_state._mask_args(args)
+        print(f"\n  〔高风险工具请求 {name} args={safe_args}〕")
+        try:
+            ans = input("  允许执行？输入 yes 确认，其它为拒绝 > ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return False, "未确认"
+        ok = ans in ("yes", "y", "是", "确认")
+        return ok, "" if ok else "未确认"
+
     current_user = ""
     if messages and messages[-1].get("role") == "user":
         current_user = str(messages[-1].get("content") or "")
@@ -107,6 +117,7 @@ async def ask(client, system: str, messages: list[dict], stats: dict) -> None:
 
     usage = await engine.run_turn(client, turn_system, messages, on_text, on_tool,
                                   on_tool_result=on_tool_result,
+                                  approval_callback=approve_tool,
                                   allow_delegate=True)
     dur = time.time() - t0
     tok = int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0))

@@ -199,6 +199,7 @@ async def kb_search(args: dict) -> dict:
     "只取那一节（省上下文，优先用）；不传则返回全文（过长会截断并列出小节，再按小节取）。",
     {"note": str, "section": str},
     annotations=_RO,
+    required=("note",),
 )
 async def kb_read(args: dict) -> dict:
     note = str(args.get("note", "")).strip()

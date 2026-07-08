@@ -118,6 +118,7 @@ def run_final_check(workflow_type: str, completed_steps, used_tools, notes: str)
     "completed_steps 传已完成的检查项 id；used_tools 传本任务用过的工具名；notes 写假设、失败、边界说明。",
     {"workflow_type": str, "completed_steps": list, "used_tools": list, "notes": str},
     annotations=_RO,
+    required=("workflow_type", "completed_steps", "used_tools"),
 )
 async def final_task_check(args: dict) -> dict:
     payload = run_final_check(

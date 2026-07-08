@@ -89,6 +89,7 @@ def _summary(items: list[dict]) -> dict:
     {"name": str, "asset_class": str, "amount": float,
      "code": str, "sector": str, "cost": float, "note": str},
     annotations=_WRITE,
+    required=("name", "asset_class", "amount"),
 )
 async def add_holding(args: dict) -> dict:
     name = str(args.get("name", "")).strip()
@@ -178,6 +179,8 @@ async def update_holding(args: dict) -> dict:
     "删除一笔持仓（卖出/清仓后）。identifier 传 id 或标的名。",
     {"identifier": str},
     annotations=_DEL,
+    required=("identifier",),
+    risk="high",
 )
 async def remove_holding(args: dict) -> dict:
     identifier = str(args.get("identifier", "")).strip()

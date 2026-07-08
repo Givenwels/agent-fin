@@ -151,6 +151,61 @@ def test_execute_tool_rejects_missing_required_args():
     assert "code" in result.text
 
 
+def test_execute_tool_allows_missing_optional_args_when_required_declared():
+    seen = {}
+
+    async def capture(args):
+        seen.update(args)
+        return {"content": [{"type": "text", "text": "ok"}]}
+
+    tool = ToolDef(
+        "add_like",
+        "required and optional args",
+        {"name": str, "note": str, "amount": float},
+        capture,
+        required=("name", "amount"),
+    )
+    result = asyncio.run(engine._execute_tool(
+        "add_like", {"name": "沪深300ETF", "amount": "1000"},
+        {"add_like": tool}, max_output_chars=100, timeout_seconds=1,
+    ))
+
+    assert result.ok is True
+    assert seen == {"name": "沪深300ETF", "amount": 1000.0}
+
+
+def test_real_add_holding_allows_optional_fields_to_be_missing(tmp_path, monkeypatch):
+    import tools.holdings as holdings
+
+    monkeypatch.setattr(holdings, "HOLDINGS_FILE", tmp_path / "holdings.json")
+    result = asyncio.run(engine._execute_tool(
+        "add_holding",
+        {"name": "沪深300ETF", "asset_class": "股票/股票基金", "amount": "1000"},
+        {"add_holding": holdings.add_holding},
+    ))
+
+    assert result.ok is True
+    assert "沪深300ETF" in result.text
+
+
+def test_build_tool_schemas_uses_declared_required_keys():
+    async def noop(_args):
+        return {"content": [{"type": "text", "text": "ok"}]}
+
+    tool = ToolDef(
+        "x_tool",
+        "desc",
+        {"required_arg": str, "optional_arg": str},
+        noop,
+        required=("required_arg",),
+    )
+
+    schema = engine.build_tool_schemas([tool])[0]
+
+    assert schema["input_schema"]["required"] == ["required_arg"]
+    assert "optional_arg" in schema["input_schema"]["properties"]
+
+
 def test_execute_tool_coerces_simple_scalar_args():
     seen = {}
 
@@ -168,19 +223,75 @@ def test_execute_tool_coerces_simple_scalar_args():
     assert seen == {"amount": 3.5, "name": "510300"}
 
 
+def test_execute_tool_denies_high_risk_when_approval_rejects():
+    async def destructive(_args):
+        return {"content": [{"type": "text", "text": "should not run"}]}
+
+    tool = ToolDef(
+        "forget_memory",
+        "delete memory",
+        {"category": str, "key": str},
+        destructive,
+        required=("category", "key"),
+        risk="high",
+    )
+    result = asyncio.run(engine._execute_tool(
+        "forget_memory",
+        {"category": "偏好", "key": "风险"},
+        {"forget_memory": tool},
+        approval_callback=lambda name, args, tool: (False, "user rejected"),
+    ))
+
+    assert result.ok is False
+    assert "用户拒绝" in result.text
+
+
+def test_execute_tool_denies_high_risk_without_approval_callback():
+    called = False
+
+    async def destructive(_args):
+        nonlocal called
+        called = True
+        return {"content": [{"type": "text", "text": "should not run"}]}
+
+    tool = ToolDef(
+        "remove_holding",
+        "delete holding",
+        {"identifier": str},
+        destructive,
+        required=("identifier",),
+        risk="high",
+    )
+    result = asyncio.run(engine._execute_tool(
+        "remove_holding",
+        {"identifier": "test"},
+        {"remove_holding": tool},
+    ))
+
+    assert result.ok is False
+    assert called is False
+    assert "需要用户确认" in result.text
+
+
 def test_tool_catalog_groups_and_renders_tools():
     import tool_catalog
 
     rows = tool_catalog.catalog_tools([
         ToolDef("kb_search", "search docs", {"query": str}, lambda _a: None),
         ToolDef("save_memory", "save memory", {"key": str}, lambda _a: None),
+        ToolDef(
+            "forget_memory", "delete memory", {"category": str, "key": str},
+            lambda _a: None, required=("category", "key"), risk="high",
+        ),
     ])
     rendered = tool_catalog.render_tool_catalog(rows)
 
     assert rows[0]["group"] == "知识库"
     assert rows[1]["group"] == "记忆"
+    assert rows[1]["risk"] == "high"
     assert "kb_search" in rendered
     assert "key:str" in rendered
+    assert "[高风险]" in rendered
 
 
 def test_trace_state_keeps_recent_events_and_masks_args():

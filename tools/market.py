@@ -141,6 +141,7 @@ _ANN = (
     "供组合分析/优化工具使用。",
     {"symbol": str, "days": int},
     annotations=_ANN,
+    required=("symbol",),
 )
 async def get_price_history(args: dict) -> dict:
     symbol = str(args.get("symbol", "")).strip()

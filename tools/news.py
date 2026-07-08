@@ -78,6 +78,7 @@ def fetch_news(query: str, scope: str) -> tuple[list[dict], str]:
     "用于给宏观或个股判断补充时效信息——引用要注明标题、时间与来源，取不到就如实说明。",
     {"query": str, "scope": str},
     annotations=_RO,
+    required=(),
 )
 async def get_news(args: dict) -> dict:
     query = str(args.get("query", ""))

@@ -50,6 +50,7 @@ def _save(items: list[dict]) -> None:
     "title 选填(一句话标题)，related 选填(相关标的)。决策后应主动记一条，便于日后复盘。",
     {"type": str, "content": str, "title": str, "related": str},
     annotations=_WRITE,
+    required=("type", "content"),
 )
 async def add_journal(args: dict) -> dict:
     typ = str(args.get("type", "")).strip() or "其它"
@@ -76,6 +77,7 @@ async def add_journal(args: dict) -> dict:
     "列出最近的投资日记（默认最近 15 条）。limit 指定条数；复盘时用它回看历史决策。",
     {"limit": int},
     annotations=_RO,
+    required=(),
 )
 async def list_journal(args: dict) -> dict:
     items = _load()
