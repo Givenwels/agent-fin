@@ -14,6 +14,7 @@ GROUP_RULES = [
     ("知识库", {"kb_index", "kb_search", "kb_read"}),
     ("数据", {"get_macro_indicator", "get_valuation", "get_news", "get_price_history"}),
     ("组合计算", {"calc_portfolio_metrics", "optimize_portfolio"}),
+    ("Agent状态", {"agent_self_check"}),
 ]
 
 

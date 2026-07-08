@@ -37,6 +37,7 @@ from .workflows import start_financial_workflow
 from .checks import final_task_check
 from .playbook import start_allocation, decision_checklist
 from .portfolio import calc_portfolio_metrics, optimize_portfolio
+from .agent_status import agent_self_check
 
 # 暴露给 create_sdk_mcp_server 的工具清单
 ALL_TOOLS = [
@@ -50,6 +51,7 @@ ALL_TOOLS = [
     get_macro_indicator, get_valuation, get_news,
     get_price_history, calc_portfolio_metrics, optimize_portfolio,
     export_report, push_notification,
+    agent_self_check,
 ]
 
 __all__ = [
@@ -64,5 +66,6 @@ __all__ = [
     "get_macro_indicator", "get_valuation", "get_news",
     "get_price_history", "calc_portfolio_metrics", "optimize_portfolio",
     "export_report", "push_notification",
+    "agent_self_check",
     "SAMPLE_RETURNS",
 ]

@@ -29,6 +29,7 @@
 - `engine.py` — **Agent 循环核心**：tools→Anthropic schema 转换、客户端构造、run_turn（query.ts 同构）
   工具执行含超时、输出截断、必填/选填参数校验，以及高风险工具确认回调；没有确认通道时默认拒绝高风险工具。
 - `context_manager.py` — 上下文统计/压缩：长会话压成历史摘要，避免孤立 tool 结果续接
+- `agent_profile.py` — Agent 能力画像与运行体检：`/agent`、`/doctor`、`agent_self_check`
 - `tool_catalog.py` — 工具目录/能力自描述：`/tools` 查看本地工具分组与参数
 - `trace_state.py` — 会话内工具轨迹：`/trace` 查看最近工具调用，敏感参数遮盖
 - `main.py` — 入口：装配（system+工具+相关记忆）+ REPL 循环 + 本地命令（/help /tools /trace /context /memory /sources）+ `-c` 续接

@@ -38,6 +38,16 @@ if /i "%~1"=="tools" (
     exit /b %errorlevel%
 )
 
+if /i "%~1"=="agent" (
+    "%PY%" -c "import asyncio, main, trace_state; stats={'turns':0,'tokens':0,'context_compactions':0,'tool_errors':0,'trace':trace_state.AgentTrace(),'messages':[]}; asyncio.run(main.handle_local_command('/agent', stats))"
+    exit /b %errorlevel%
+)
+
+if /i "%~1"=="doctor" (
+    "%PY%" -c "import asyncio, main, trace_state; stats={'turns':0,'tokens':0,'context_compactions':0,'tool_errors':0,'trace':trace_state.AgentTrace(),'messages':[]}; asyncio.run(main.handle_local_command('/doctor', stats))"
+    exit /b %errorlevel%
+)
+
 if /i "%~1"=="menu" (
     call "%ROOT%\agent.bat"
     exit /b %errorlevel%
