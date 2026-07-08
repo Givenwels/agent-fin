@@ -15,6 +15,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 ENV_FILE = ROOT / ".env"
 DEFAULT_CODEX_MODEL = "gpt-5.1"
+DEFAULT_CLAUDE_COMPAT_MODEL = "deepseek-v4-flash"
+DEFAULT_CLAUDE_COMPAT_BASE_URL = "https://api.deepseek.com/anthropic"
 
 
 def mask_secret(value: str) -> str:
@@ -119,6 +121,37 @@ def setup_codex_api_interactive(path: Path = ENV_FILE) -> None:
     os.environ.update(values)
     print("已写入 .env：")
     print(render_api_status(os.environ))
+
+
+def claude_api_values_from_env(env: dict | None = None) -> dict[str, str]:
+    """Build .env values from Claude Code/Anthropic-compatible environment."""
+    if env is None:
+        env = os.environ
+    key_name = "ANTHROPIC_AUTH_TOKEN" if env.get("ANTHROPIC_AUTH_TOKEN") else "ANTHROPIC_API_KEY"
+    key = env.get(key_name) or ""
+    if not key:
+        return {}
+    values = {
+        "FIN_API_PROVIDER": "anthropic",
+        key_name: key,
+        "ANTHROPIC_BASE_URL": env.get("ANTHROPIC_BASE_URL") or DEFAULT_CLAUDE_COMPAT_BASE_URL,
+        "ANTHROPIC_MODEL": env.get("ANTHROPIC_MODEL") or DEFAULT_CLAUDE_COMPAT_MODEL,
+    }
+    return values
+
+
+def setup_claude_api_from_env(path: Path = ENV_FILE) -> bool:
+    """Reuse the current Claude Code/Anthropic-compatible API env for this agent."""
+    values = claude_api_values_from_env(os.environ)
+    if not values:
+        print("没有发现 ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN，无法复用 Claude Code API。")
+        print("如果 Claude Code 使用的是内部登录态，这个本地 Python Agent 不能直接读取。")
+        return False
+    write_env_values(values, path)
+    os.environ.update(values)
+    print("已复用 Claude Code / DeepSeek API 配置写入本地 .env：")
+    print(render_api_status(os.environ))
+    return True
 
 
 async def test_api_connection() -> tuple[bool, str]:

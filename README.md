@@ -24,6 +24,8 @@ fin
 
 ```bat
 fin setup    # 首次配置或修改 API
+fin claude   # 复用 Claude Code 的 DeepSeek/Anthropic-compatible API
+fin deepseek # 同上，别名
 fin test     # 测试 API 连通
 fin resume   # 接上次会话
 fin tools    # 查看工具目录
@@ -63,9 +65,12 @@ python main.py --test-api
 
 ### ⚠️ 起不来？先查这两个（最常见）
 
-1. **提示 API 未配置**：运行 `python main.py --setup-api`，按提示填写 OpenAI API key 和模型。
-2. **接口测试失败**：运行 `python main.py --test-api` 看具体错误；常见原因是 key 错、模型名不可用、代理/网络问题。
-3. **模型**：默认走 `OPENAI_MODEL`（Codex/OpenAI provider）；想换模型改 `.env` 即可，代码不用动。
+1. **复用 Claude Code / DeepSeek API**：运行 `fin claude`。它会读取当前环境里的
+   `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_BASE_URL`、`ANTHROPIC_MODEL`，
+   写入本地 `.env`（已 gitignore，真实 key 不入库）。
+2. **手动配置 OpenAI-compatible API**：运行 `python main.py --setup-api`，按提示填写 key、base_url 和模型。
+3. **接口测试失败**：运行 `fin test` 看具体错误；常见原因是 key 错、模型名不可用、代理/网络问题。
+4. **模型**：想换模型改 `.env` 即可，代码不用动。
 
 试两句：
 - `分析 60% 沪深300ETF(510300) + 40% 国债ETF(511010) 的组合风险`

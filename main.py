@@ -360,8 +360,12 @@ async def main() -> None:
     if any(a == "--setup-api" for a in sys.argv[1:]):
         api_config.setup_codex_api_interactive()
         return
+    if any(a in ("--use-claude-api", "--use-deepseek-api") for a in sys.argv[1:]):
+        raise SystemExit(0 if api_config.setup_claude_api_from_env() else 1)
     if any(a == "--test-api" for a in sys.argv[1:]):
-        raise SystemExit(api_config.run_test_api_sync())
+        ok, msg = await api_config.test_api_connection()
+        print(msg)
+        raise SystemExit(0 if ok else 1)
 
     print(BANNER)
     alert = pending_alert()

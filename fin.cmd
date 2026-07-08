@@ -13,6 +13,16 @@ if /i "%~1"=="setup" (
     exit /b %errorlevel%
 )
 
+if /i "%~1"=="claude" (
+    "%PY%" main.py --use-claude-api
+    exit /b %errorlevel%
+)
+
+if /i "%~1"=="deepseek" (
+    "%PY%" main.py --use-deepseek-api
+    exit /b %errorlevel%
+)
+
 if /i "%~1"=="test" (
     "%PY%" main.py --test-api
     exit /b %errorlevel%

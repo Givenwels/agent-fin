@@ -3,6 +3,11 @@
 These tests never call real model APIs and never require a real key.
 """
 
+import asyncio
+import sys
+
+import pytest
+
 import api_config
 import engine
 
@@ -69,6 +74,30 @@ def test_current_api_status_allows_explicit_anthropic():
     assert status["configured"] is True
 
 
+def test_claude_api_values_from_env_prefers_anthropic_env():
+    values = api_config.claude_api_values_from_env({
+        "ANTHROPIC_API_KEY": "sk-ant-test",
+        "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+        "ANTHROPIC_MODEL": "deepseek-v4-flash",
+    })
+
+    assert values == {
+        "FIN_API_PROVIDER": "anthropic",
+        "ANTHROPIC_API_KEY": "sk-ant-test",
+        "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+        "ANTHROPIC_MODEL": "deepseek-v4-flash",
+    }
+
+
+def test_claude_api_values_from_env_requires_key():
+    values = api_config.claude_api_values_from_env({
+        "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+        "ANTHROPIC_MODEL": "deepseek-v4-flash",
+    })
+
+    assert values == {}
+
+
 def test_engine_provider_name_codex(monkeypatch):
     monkeypatch.setenv("FIN_API_PROVIDER", "codex")
     monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
@@ -112,3 +141,19 @@ def test_openai_tool_schema_conversion():
             },
         },
     }]
+
+
+def test_main_test_api_does_not_nest_asyncio_run(monkeypatch, capsys):
+    import main
+
+    async def fake_test_api_connection():
+        return True, "API ok"
+
+    monkeypatch.setattr(api_config, "test_api_connection", fake_test_api_connection)
+    monkeypatch.setattr(sys, "argv", ["main.py", "--test-api"])
+
+    with pytest.raises(SystemExit) as exc:
+        asyncio.run(main.main())
+
+    assert exc.value.code == 0
+    assert "API ok" in capsys.readouterr().out

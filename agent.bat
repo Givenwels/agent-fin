@@ -16,11 +16,13 @@ echo   2. Setup or change API
 echo   3. Test API connection
 echo   4. Resume last session
 echo   5. Show tool catalog
+echo   6. Reuse Claude/DeepSeek API
 echo   0. Exit
 echo.
-choice /c 123450 /n /m "Choose: "
+choice /c 1234560 /n /m "Choose: "
 
-if errorlevel 6 goto end
+if errorlevel 7 goto end
+if errorlevel 6 goto claudeapi
 if errorlevel 5 goto tools
 if errorlevel 4 goto resume
 if errorlevel 3 goto testapi
@@ -45,6 +47,10 @@ goto pause_menu
 
 :tools
 "%PY%" -c "import asyncio, main, trace_state; stats={'turns':0,'tokens':0,'context_compactions':0,'tool_errors':0,'trace':trace_state.AgentTrace(),'messages':[]}; asyncio.run(main.handle_local_command('/tools', stats))"
+goto pause_menu
+
+:claudeapi
+"%PY%" main.py --use-claude-api
 goto pause_menu
 
 :pause_menu
