@@ -14,7 +14,30 @@
 > ✅ 环境已装好：conda 环境 `finagent`(Python 3.11) + OpenAI/Anthropic SDK +
 > numpy/pandas + akshare，均已验证。
 
-**最简单**：双击 `run.bat`（自动切到 finagent 环境并启动）。
+**最简单**：在任意命令行输入：
+
+```bat
+fin
+```
+
+常用短命令：
+
+```bat
+fin setup    # 首次配置或修改 API
+fin test     # 测试 API 连通
+fin resume   # 接上次会话
+fin tools    # 查看工具目录
+fin menu     # 打开菜单启动器
+```
+
+也可以双击：
+
+- 双击 `agent.bat`：打开菜单（启动 / 配 API / 测 API / 续接上次 / 看工具）。
+- 双击 `start.bat`：直接启动新会话。
+- 双击 `setup.bat`：首次配置或修改 API。
+- 双击 `resume.bat`：接上次会话。
+
+旧入口 `run.bat` 仍保留：双击后直接启动，也可带参数如 `run.bat -c`。
 
 **命令行**：
 ```bash
