@@ -20,6 +20,7 @@ import json
 import os
 import time
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 from tools import ALL_TOOLS
@@ -204,6 +205,11 @@ def _tool_output_chars() -> int:
         return DEFAULT_TOOL_OUTPUT_CHARS
 
 
+def _streaming_enabled() -> bool:
+    raw = (os.environ.get("FIN_STREAMING") or "1").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
 def _extract_tool_text(result: dict) -> str:
     content = (result or {}).get("content") or []
     if not content:
@@ -212,6 +218,48 @@ def _extract_tool_text(result: dict) -> str:
     if isinstance(first, dict):
         return str(first.get("text", ""))
     return str(first)
+
+
+def _anthropic_response_text(resp) -> str:
+    return "".join(
+        getattr(block, "text", "")
+        for block in getattr(resp, "content", []) or []
+        if getattr(block, "type", None) == "text"
+    )
+
+
+async def _create_anthropic_message(raw_client, kwargs: dict, on_text=None):
+    if not on_text or not _streaming_enabled() or not hasattr(raw_client.messages, "stream"):
+        resp = await raw_client.messages.create(**kwargs)
+        text = _anthropic_response_text(resp)
+        if text and on_text:
+            on_text(text)
+        return resp
+
+    emitted = False
+    try:
+        async with raw_client.messages.stream(**kwargs) as stream:
+            async for text in stream.text_stream:
+                if text:
+                    emitted = True
+                    on_text(text)
+            resp = await stream.get_final_message()
+            if not emitted:
+                text = _anthropic_response_text(resp)
+                if text:
+                    on_text(text)
+            return resp
+    except (TypeError, AttributeError):
+        pass
+    except Exception:
+        if emitted:
+            raise
+
+    resp = await raw_client.messages.create(**kwargs)
+    text = _anthropic_response_text(resp)
+    if text:
+        on_text(text)
+    return resp
 
 
 def _coerce_tool_value(value: Any, expected: type) -> tuple[Any, str | None]:
@@ -380,15 +428,10 @@ async def run_turn(
         kwargs = dict(model=model, system=system, messages=messages, max_tokens=max_tokens)
         if use_tools and schema:
             kwargs["tools"] = schema
-        resp = await raw_client.messages.create(**kwargs)
+        resp = await _create_anthropic_message(raw_client, kwargs, on_text)
         u = resp.usage
         total_in += getattr(u, "input_tokens", 0) or 0
         total_out += getattr(u, "output_tokens", 0) or 0
-
-        if on_text:
-            txt = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
-            if txt:
-                on_text(txt)
 
         messages.append({"role": "assistant", "content": _blocks_to_dicts(resp.content)})
 
@@ -495,6 +538,86 @@ def _json_args(raw: str) -> dict:
         return {}
 
 
+def _merge_openai_tool_delta(parts: dict[int, dict], call) -> None:
+    idx = getattr(call, "index", None)
+    if idx is None:
+        idx = max(parts.keys(), default=-1) + 1
+    item = parts.setdefault(idx, {
+        "id": "",
+        "type": "function",
+        "function": {"name": "", "arguments": ""},
+    })
+    call_id = getattr(call, "id", None)
+    if call_id:
+        item["id"] = call_id
+    call_type = getattr(call, "type", None)
+    if call_type:
+        item["type"] = call_type
+    fn = getattr(call, "function", None)
+    if fn:
+        name = getattr(fn, "name", None)
+        if name:
+            item["function"]["name"] += name
+        args = getattr(fn, "arguments", None)
+        if args:
+            item["function"]["arguments"] += args
+
+
+def _openai_tool_call_objects(parts: dict[int, dict]) -> list:
+    calls = []
+    for idx in sorted(parts):
+        item = parts[idx]
+        calls.append(SimpleNamespace(
+            id=item.get("id", ""),
+            type=item.get("type", "function"),
+            function=SimpleNamespace(
+                name=item.get("function", {}).get("name", ""),
+                arguments=item.get("function", {}).get("arguments", ""),
+            ),
+        ))
+    return calls
+
+
+async def _create_openai_chat_completion(client, kwargs: dict, on_text=None):
+    if not on_text or not _streaming_enabled():
+        resp = await client.chat.completions.create(**kwargs)
+        msg = resp.choices[0].message
+        text = msg.content or ""
+        if text and on_text:
+            on_text(text)
+        return resp
+
+    stream_kwargs = dict(kwargs)
+    stream_kwargs["stream"] = True
+    stream = await client.chat.completions.create(**stream_kwargs)
+    text_parts: list[str] = []
+    tool_parts: dict[int, dict] = {}
+    usage = SimpleNamespace(prompt_tokens=0, completion_tokens=0)
+    async for chunk in stream:
+        u = getattr(chunk, "usage", None)
+        if u:
+            usage.prompt_tokens += getattr(u, "prompt_tokens", 0) or 0
+            usage.completion_tokens += getattr(u, "completion_tokens", 0) or 0
+        choices = getattr(chunk, "choices", None) or []
+        if not choices:
+            continue
+        delta = getattr(choices[0], "delta", None)
+        if not delta:
+            continue
+        text = getattr(delta, "content", None)
+        if text:
+            text_parts.append(text)
+            on_text(text)
+        for call in getattr(delta, "tool_calls", None) or []:
+            _merge_openai_tool_delta(tool_parts, call)
+
+    msg = SimpleNamespace(
+        content="".join(text_parts),
+        tool_calls=_openai_tool_call_objects(tool_parts),
+    )
+    return SimpleNamespace(choices=[SimpleNamespace(message=msg)], usage=usage)
+
+
 async def _run_turn_codex(
     provider_client: AgentClient,
     client,
@@ -533,19 +656,17 @@ async def _run_turn_codex(
         # Newer models accept max_completion_tokens; older ones accept max_tokens.
         kwargs["max_completion_tokens"] = max_tokens
         try:
-            resp = await client.chat.completions.create(**kwargs)
+            resp = await _create_openai_chat_completion(client, kwargs, on_text)
         except TypeError:
             kwargs.pop("max_completion_tokens", None)
             kwargs["max_tokens"] = max_tokens
-            resp = await client.chat.completions.create(**kwargs)
+            resp = await _create_openai_chat_completion(client, kwargs, on_text)
 
         u = getattr(resp, "usage", None)
         total_in += getattr(u, "prompt_tokens", 0) or 0
         total_out += getattr(u, "completion_tokens", 0) or 0
         msg = resp.choices[0].message
         text = msg.content or ""
-        if text and on_text:
-            on_text(text)
 
         tool_calls = list(msg.tool_calls or [])
         assistant_msg = {"role": "assistant", "content": text}

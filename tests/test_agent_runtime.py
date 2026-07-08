@@ -5,6 +5,7 @@ real memory/portfolio directories.
 """
 
 import asyncio
+from types import SimpleNamespace
 
 import engine
 import tools.memory as memory
@@ -307,3 +308,184 @@ def test_trace_state_keeps_recent_events_and_masks_args():
     assert "b" in rendered and "c" in rendered
     assert "secret" not in rendered
     assert "截断" in rendered
+
+
+def test_anthropic_turn_streams_text_chunks_before_final_message():
+    class FakeBlock:
+        type = "text"
+        text = "你好"
+
+    class FakeMessage:
+        usage = SimpleNamespace(input_tokens=1, output_tokens=2)
+        content = [FakeBlock()]
+        stop_reason = "end_turn"
+
+    class FakeStream:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def _text_stream(self):
+            yield "你"
+            yield "好"
+
+        @property
+        def text_stream(self):
+            return self._text_stream()
+
+        async def get_final_message(self):
+            return FakeMessage()
+
+    class FakeMessages:
+        def stream(self, **_kwargs):
+            return FakeStream()
+
+        async def create(self, **_kwargs):
+            raise AssertionError("non-streaming create should not be used")
+
+    chunks = []
+    messages = [{"role": "user", "content": "hi"}]
+
+    usage = asyncio.run(engine.run_turn(
+        engine.AgentClient("anthropic", SimpleNamespace(messages=FakeMessages())),
+        "system",
+        messages,
+        on_text=chunks.append,
+        tools_schema=[],
+        tool_by_name={},
+        allow_delegate=False,
+    ))
+
+    assert chunks == ["你", "好"]
+    assert usage == {"input_tokens": 1, "output_tokens": 2}
+    assert messages[-1]["role"] == "assistant"
+    assert messages[-1]["content"][0]["text"] == "你好"
+
+
+def test_anthropic_stream_emits_final_text_when_no_text_chunks_arrive():
+    class FakeBlock:
+        type = "text"
+        text = "完成"
+
+    class FakeMessage:
+        usage = SimpleNamespace(input_tokens=1, output_tokens=2)
+        content = [FakeBlock()]
+        stop_reason = "end_turn"
+
+    class FakeStream:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def _text_stream(self):
+            if False:
+                yield ""
+
+        @property
+        def text_stream(self):
+            return self._text_stream()
+
+        async def get_final_message(self):
+            return FakeMessage()
+
+    class FakeMessages:
+        def stream(self, **_kwargs):
+            return FakeStream()
+
+        async def create(self, **_kwargs):
+            raise AssertionError("non-streaming create should not be used")
+
+    chunks = []
+    messages = [{"role": "user", "content": "hi"}]
+
+    asyncio.run(engine.run_turn(
+        engine.AgentClient("anthropic", SimpleNamespace(messages=FakeMessages())),
+        "system",
+        messages,
+        on_text=chunks.append,
+        tools_schema=[],
+        tool_by_name={},
+        allow_delegate=False,
+    ))
+
+    assert chunks == ["完成"]
+    assert messages[-1]["content"][0]["text"] == "完成"
+
+
+def test_streaming_can_be_disabled_with_env(monkeypatch):
+    monkeypatch.setenv("FIN_STREAMING", "0")
+
+    class FakeBlock:
+        type = "text"
+        text = "非流式"
+
+    class FakeMessage:
+        usage = SimpleNamespace(input_tokens=1, output_tokens=2)
+        content = [FakeBlock()]
+        stop_reason = "end_turn"
+
+    class FakeMessages:
+        def stream(self, **_kwargs):
+            raise AssertionError("stream should not be used when FIN_STREAMING=0")
+
+        async def create(self, **_kwargs):
+            return FakeMessage()
+
+    chunks = []
+    messages = [{"role": "user", "content": "hi"}]
+
+    asyncio.run(engine.run_turn(
+        engine.AgentClient("anthropic", SimpleNamespace(messages=FakeMessages())),
+        "system",
+        messages,
+        on_text=chunks.append,
+        tools_schema=[],
+        tool_by_name={},
+        allow_delegate=False,
+    ))
+
+    assert chunks == ["非流式"]
+
+
+def test_codex_turn_streams_text_chunks_before_final_message():
+    class FakeStream:
+        def __init__(self):
+            self._chunks = [
+                SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="你", tool_calls=None))], usage=None),
+                SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="好", tool_calls=None))], usage=None),
+            ]
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            if not self._chunks:
+                raise StopAsyncIteration
+            return self._chunks.pop(0)
+
+    class FakeCompletions:
+        async def create(self, **kwargs):
+            assert kwargs.get("stream") is True
+            return FakeStream()
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+    chunks = []
+    messages = [{"role": "user", "content": "hi"}]
+
+    usage = asyncio.run(engine.run_turn(
+        engine.AgentClient("codex", client),
+        "system",
+        messages,
+        on_text=chunks.append,
+        tools_schema=[],
+        tool_by_name={},
+        allow_delegate=False,
+    ))
+
+    assert chunks == ["你", "好"]
+    assert usage == {"input_tokens": 0, "output_tokens": 0}
+    assert messages[-1] == {"role": "assistant", "content": "你好"}
