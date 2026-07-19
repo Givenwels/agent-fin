@@ -209,7 +209,7 @@ agent_fin/
     └── portfolio.py # calc_portfolio_metrics / optimize_portfolio（纯numpy）
 ```
 
-**31 个工具，分 10 组**：金融工作流(start_financial_workflow/final_task_check) · 显式计划(write_plan) ·
+**59 个工具，分 10 组**：金融工作流(start_financial_workflow/final_task_check) · 显式计划(write_plan) ·
 持仓与看板 · 风险诊断与调仓清单 · 投资日记与复盘 · 记忆 · 知识库 · 数据与量化。
 实时资讯(get_news) · 报告导出/桌面通知(export_report/push_notification) · Agent 自检(agent_self_check)。
 `/tools` 中参数名带 `?` 表示选填；不带 `?` 表示模型必须提供；`[高风险]` 表示执行前需要用户确认。
